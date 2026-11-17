@@ -1,16 +1,11 @@
-// Bots: the nine combatants who are not the player. Each is a small state
-// machine — advance along waypoint routes, hold an angle, engage what it
-// sees, hunt what it heard, plant or defuse the Charge — over one shared
-// entity shape that the player also uses. Perception is a vision cone plus
-// line of sight, and gunfire noise events; shooting is burst fire with a
-// reaction delay and distance/movement accuracy, resolved by main.
+// Bots: perception with smoke occlusion, 3D elevation sync, and burst combat.
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { moveCircle, losClear } from './physics.js';
 import { freshWeapon } from './weapons.js';
 
 export const BOT_NAMES = {
-  att: ['Rook', 'Sable', 'Juno', 'Pike'],
+  att: ['Rook', 'Sable', 'Juno', 'Pike', 'Valk'],
   def: ['Vex', 'Halo', 'Onyx', 'Rune', 'Fable'],
 };
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -96,7 +91,7 @@ export function createCombatant(scene, team, name, isPlayer = false) {
       hold: null, seen: null, lastSeenPos: new THREE.Vector3(), lastSeenT: -99,
       heardPos: null, reactAt: 0, burstLeft: 0, nextShotAt: 0, pauseUntil: 0,
       strafeDir: 1, strafeT: 0, perceiveAt: Math.random() * 0.15, stuckT: 0, lastX: 0, lastZ: 0,
-      throwT: 3 + Math.random() * 4, // grenade cooldown: bots use what they buy
+      throwT: 3 + Math.random() * 4,
     };
   }
   return e;
@@ -127,6 +122,7 @@ export function resetCombatant(e, spawn, yaw) {
     e.ai.lastSeenT = -99;
     e.ai.heardPos = null;
     e.ai.path = [];
+    e.ai.stuckT = 0;
   }
 }
 
@@ -167,7 +163,6 @@ export function findPath(map, from, to) {
   return [to];
 }
 
-// Steer toward a point; returns the remaining distance.
 function seek(S, e, tx, tz, speed, dt) {
   const dx = tx - e.pos.x;
   const dz = tz - e.pos.z;
@@ -179,6 +174,18 @@ function seek(S, e, tx, tz, speed, dt) {
   moveCircle(e.pos, e.radius, (dx / dist) * stepLen, (dz / dist) * stepLen, S.map.colliders);
   const moved = Math.hypot(e.pos.x - beforeX, e.pos.z - beforeZ);
   e.speedNow = dt > 0 ? moved / dt : 0;
+
+  // Unstuck nudge if blocked against an obstacle while advancing.
+  if (e.ai && moved < stepLen * 0.2) {
+    e.ai.stuckT += dt;
+    if (e.ai.stuckT > 0.6) {
+      e.ai.stuckT = 0;
+      const side = e.ai.strafeDir || 1;
+      moveCircle(e.pos, e.radius, (-dz / dist) * stepLen * side, (dx / dist) * stepLen * side, S.map.colliders);
+    }
+  } else if (e.ai) {
+    e.ai.stuckT = 0;
+  }
   return dist;
 }
 
@@ -190,7 +197,7 @@ function faceToward(e, tx, tz, dt, rate = 10) {
   e.yaw += THREE.MathUtils.clamp(diff, -rate * dt, rate * dt);
 }
 
-// --- Perception ----------------------------------------------------------------
+// --- Perception --------------------------------------------------------------
 function perceive(S, e, now) {
   const ai = e.ai;
   let bestDist = Infinity;
@@ -201,7 +208,10 @@ function perceive(S, e, now) {
     const dz = other.pos.z - e.pos.z;
     const dist = Math.hypot(dx, dz);
     if (dist > 42) continue;
-    // Vision cone: 110 degrees, wider at point blank.
+
+    // Block bot vision through active smoke clouds.
+    if (typeof S.isBlockedBySmoke === 'function' && S.isBlockedBySmoke(e.pos.x, e.pos.z, other.pos.x, other.pos.z)) continue;
+
     const fx = -Math.sin(e.yaw);
     const fz = -Math.cos(e.yaw);
     const dot = (dx * fx + dz * fz) / (dist || 1);
@@ -218,7 +228,6 @@ function perceive(S, e, now) {
   } else if (now - ai.lastSeenT > 0.4) {
     ai.seen = null;
   }
-  // Hearing: fresh gunfire noise pulls attention.
   for (const n of S.noise) {
     if (now - n.t > 1.2 || n.team === e.team) continue;
     const d = Math.hypot(n.x - e.pos.x, n.z - e.pos.z);
@@ -229,9 +238,7 @@ function perceive(S, e, now) {
   }
 }
 
-// --- Orders ----------------------------------------------------------------------
-// Rounds (and the plant/defuse logic) steer bots by setting a goal: a
-// waypoint to travel to, then a behaviour on arrival.
+// --- Orders ------------------------------------------------------------------
 export function orderMove(S, e, nodeIdx, then = 'hold') {
   const ai = e.ai;
   const from = nearestNode(S.map, e.pos.x, e.pos.z);
@@ -246,7 +253,7 @@ export function orderHold(e, hold) {
   e.ai.state = 'hold';
 }
 
-// --- Main update -------------------------------------------------------------------
+// --- Main Update -------------------------------------------------------------
 export function updateBot(S, e, dt) {
   const ai = e.ai;
   const now = S.time;
@@ -257,7 +264,7 @@ export function updateBot(S, e, dt) {
   }
   ai.throwT -= dt;
   const w = e.current;
-  if (w.reloadUntil && now >= w.reloadUntil) { // finish a reload
+  if (w.reloadUntil && now >= w.reloadUntil) {
     const take = Math.min(w.def.mag - w.mag, w.reserve);
     w.mag += take;
     w.reserve -= take;
@@ -267,7 +274,6 @@ export function updateBot(S, e, dt) {
 
   const memoryFresh = now - ai.lastSeenT < 2.6 && ai.lastSeenPos.lengthSq() > 0;
 
-  // Engaging takes priority over everything but planting/defusing channels.
   if (ai.seen && ai.state !== 'plant' && ai.state !== 'defuse') ai.state = 'engage';
 
   switch (ai.state) {
@@ -276,12 +282,10 @@ export function updateBot(S, e, dt) {
       if (!target) { ai.state = memoryFresh ? 'hunt' : ai.then === 'hold' && ai.hold ? 'hold' : 'advance'; break; }
       faceToward(e, target.pos.x, target.pos.z, dt, 12);
       const dist = Math.hypot(target.pos.x - e.pos.x, target.pos.z - e.pos.z);
-      // A frag is worth more than bullets at mid range: lob it, then push.
       if (e.nades.frag > 0 && ai.throwT <= 0 && dist >= 6 && dist <= 26) {
         S.throwNadeAt(e, 'frag', target.pos.x, target.pos.z);
         ai.throwT = 7 + S.rng() * 5;
       }
-      // Strafe in short steps between bursts; stand still while firing.
       ai.strafeT -= dt;
       if (ai.strafeT <= 0) { ai.strafeDir = S.rng() > 0.5 ? 1 : -1; ai.strafeT = 0.5 + S.rng() * 0.7; }
       const firing = now >= ai.pauseUntil && now >= ai.reactAt;
@@ -326,7 +330,6 @@ export function updateBot(S, e, dt) {
         faceToward(e, h.x, h.z, dt);
       } else {
         e.speedNow = 0;
-        // Watch the angle, with a slow scan either side of it.
         const base = Math.atan2(-(h.lx - e.pos.x), -(h.lz - e.pos.z));
         const want = base + Math.sin(now * 0.45 + e.pos.x) * 0.35;
         let diff = want - e.yaw;
@@ -337,7 +340,6 @@ export function updateBot(S, e, dt) {
       break;
     }
     case 'advance': {
-      // Rotating onto a planted Charge, a Warden smokes it off before pushing in.
       if (e.team === 'def' && S.charge.planted && e.nades.smoke > 0 && ai.throwT <= 0) {
         const cd = Math.hypot(S.charge.x - e.pos.x, S.charge.z - e.pos.z);
         if (cd > 5 && cd < 24) {
@@ -358,11 +360,10 @@ export function updateBot(S, e, dt) {
       }
       break;
     }
-    default: // idle
+    default:
       e.speedNow = 0;
   }
 
-  // Footstep noise while running.
   if (e.speedNow > 3.4) {
     ai.stepT = (ai.stepT || 0) - dt;
     if (ai.stepT <= 0) {
@@ -372,8 +373,6 @@ export function updateBot(S, e, dt) {
   }
 }
 
-// Mesh sync, flinch and the fall when a bot dies. Called for every bot,
-// alive or not, so corpses finish their fall during the round-end pause.
 export function updateBotVisual(e, dt) {
   if (!e.mesh) return;
   e.mesh.position.copy(e.pos);
@@ -382,7 +381,7 @@ export function updateBotVisual(e, dt) {
     e.deathT += dt;
     const k = Math.min(1, e.deathT / 0.35);
     e.mesh.rotation.set(-(Math.PI / 2) * k * 0.92, e.yaw, 0);
-    e.mesh.position.y = -Math.max(0, e.deathT - 3.2) * 0.5; // sink away late
+    e.mesh.position.y = e.pos.y - Math.max(0, e.deathT - 3.2) * 0.5;
     if (e.deathT > 3.8) e.mesh.visible = false;
     return;
   }
@@ -390,7 +389,6 @@ export function updateBotVisual(e, dt) {
   e.flinch = Math.max(0, e.flinch - dt * 6);
   const torso = e.mesh.userData.torso;
   if (torso) torso.rotation.x = -e.flinch * 0.35;
-  // A little run bob so movement reads in screenshots.
   const bob = e.speedNow > 0.4 ? Math.abs(Math.sin(performance.now() * 0.012 + e.pos.x)) * 0.03 : 0;
-  e.mesh.position.y = bob;
+  e.mesh.position.y = e.pos.y + bob;
 }

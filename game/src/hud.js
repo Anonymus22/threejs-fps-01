@@ -1,7 +1,4 @@
 // HUD: every readout the player needs, updated from the one state object.
-// DOM lives in index.html; this module caches last-written values so a frame
-// only touches the document when something actually changed. It also owns
-// the buy menu, the round banner, the killfeed and the minimap.
 import { PALETTE as P } from './palette.js';
 import { WEAPONS, NADE_DEFS, ARMOR_PRICE } from './weapons.js';
 
@@ -52,36 +49,66 @@ export function createHud(S) {
       if (bannerTimer > 0) { bannerTimer -= dt * 1000; if (bannerTimer <= 0) el.banner.classList.remove('on'); }
       if (hitTimer > 0) { hitTimer -= dt * 1000; if (hitTimer <= 0) el.hitmarker.classList.remove('on'); }
       if (dmgTimer > 0) { dmgTimer -= dt * 1000; if (dmgTimer <= 0) el.dmg.classList.remove('on'); }
+
       setText(el.health, 'hp', `${Math.max(0, Math.ceil(p.hp))}`);
       setWidth(el.healthBar, 'hpb', Math.max(0, p.hp) / 100);
       setText(el.armor, 'ar', `${Math.ceil(p.armor)}`);
       setWidth(el.armorBar, 'arb', Math.max(0, p.armor) / 100);
+
       const w = p.current;
       if (p.weaponSlot === 'nade') {
         setText(el.weapon, 'wn', p.nadeType === 'frag' ? 'Frag Grenade' : 'Smoke Grenade');
         setText(el.ammoMag, 'am', `${p.nades[p.nadeType]}`);
         setText(el.ammoRes, 'ar2', '');
       } else if (w) {
-        setText(el.weapon, 'wn', w.def.name);
+        const isReloading = w.reloadUntil && S.time < w.reloadUntil;
+        setText(el.weapon, 'wn', isReloading ? `${w.def.name} (RELOADING)` : w.def.name);
         setText(el.ammoMag, 'am', `${w.mag}`);
         setText(el.ammoRes, 'ar2', `/ ${w.reserve}`);
       }
+
       setText(el.money, 'mo', `$${p.money}`);
       const t = Math.max(0, Math.ceil(S.phaseT));
       setText(el.timer, 'ti', S.phase === 'buy' ? `BUY ${t}` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
       el.timer.classList.toggle('danger', S.phase === 'planted' || (S.phase === 'live' && t <= 10));
-      setText(el.phase, 'ph', { buy: 'BUY PHASE', live: `SITE ${S.targetSite} PUSH`, planted: 'CHARGE PLANTED', over: 'ROUND OVER', matchover: 'MATCH OVER', idle: '' }[S.phase] || '');
+
+      const phaseText = {
+        buy: `BUY PHASE (${p.team === 'att' ? 'ATTACK' : 'DEFEND'})`,
+        live: p.team === 'att' ? `SITE ${S.targetSite} PUSH` : 'DEFEND SITES',
+        planted: 'CHARGE PLANTED',
+        over: 'ROUND OVER',
+        matchover: 'MATCH OVER',
+        idle: '',
+      }[S.phase] || '';
+      setText(el.phase, 'ph', phaseText);
       setText(el.scoreAtt, 'sa', `${S.scores.att}`);
       setText(el.scoreDef, 'sd', `${S.scores.def}`);
       setText(el.round, 'rn', `ROUND ${S.round}`);
-      // Context note: charge prompts.
+
+      // Context prompts: Plant, Defuse, Weapon Pickup, or Buy controls.
       let note = '';
-      if (p.hasCharge && S.phase === 'live') {
+      if (!p.alive && (S.phase === 'live' || S.phase === 'planted')) {
+        note = 'SPECTATING — CLICK OR SPACE TO SWITCH TEAMMATE';
+      } else if (p.alive && p.team === 'def' && S.charge.planted) {
+        const nearCharge = Math.hypot(p.pos.x - S.charge.x, p.pos.z - S.charge.z) < 2.4;
+        note = nearCharge ? 'HOLD E TO DEFUSE THE CHARGE' : `DEFUSE THE CHARGE AT SITE ${S.charge.site}`;
+      } else if (p.alive && p.hasCharge && S.phase === 'live') {
         const site = S.map.sites[S.targetSite];
-        note = Math.hypot(p.pos.x - site.x, p.pos.z - site.z) < site.r ? 'HOLD E TO PLANT THE CHARGE' : `CARRY THE CHARGE TO SITE ${S.targetSite}`;
-      } else if (S.charge.dropped && p.alive) note = 'THE CHARGE IS DOWN — RECOVER IT';
-      else if (S.phase === 'buy') note = 'BUY WITH 1–6 OR CLICK · B CLOSES';
+        note = Math.hypot(p.pos.x - site.x, p.pos.z - site.z) < site.r
+          ? 'HOLD E TO PLANT THE CHARGE'
+          : `CARRY THE CHARGE TO SITE ${S.targetSite}`;
+      } else if (S.charge.dropped && p.alive && p.team === 'att') {
+        note = 'THE CHARGE IS DOWN — RECOVER IT';
+      } else if (S.phase === 'buy') {
+        note = 'BUY WITH 1–6 OR CLICK · B CLOSES';
+      } else if (p.alive && S.droppedWeapons) {
+        const drop = S.droppedWeapons.find(
+          (d) => Math.hypot(p.pos.x - d.pos.x, p.pos.z - d.pos.z) < 2.1 && Math.abs(p.pos.y - d.pos.y) < 1.4
+        );
+        if (drop) note = `PRESS F TO PICK UP ${drop.weapon.def.name.toUpperCase()}`;
+      }
       setText(el.note, 'nt', note);
+
       mapTimer -= dt;
       if (mapCtx && mapTimer <= 0) { mapTimer = 0.12; drawMinimap(); }
     },
@@ -174,6 +201,7 @@ export function createHud(S) {
   function drawMinimap() {
     const g = mapCtx;
     const W = el.minimap.width;
+    const p = S.entities[0];
     const toX = (x) => ((x + 32) / 64) * W;
     const toY = (z) => ((z + 32) / 64) * W;
     g.fillStyle = '#20242b';
@@ -192,13 +220,22 @@ export function createHud(S) {
       g.textAlign = 'center';
       g.fillText(key, toX(s.x), toY(s.z) + W * 0.03);
     }
+    // Active smoke clouds on minimap.
+    for (const sm of S.smokes || []) {
+      if (S.time >= sm.until) continue;
+      g.fillStyle = 'rgba(180, 188, 196, 0.45)';
+      g.beginPath();
+      g.arc(toX(sm.x), toY(sm.z), (sm.r / 64) * W, 0, Math.PI * 2);
+      g.fill();
+    }
+    // Only render teammates on minimap (no enemy wallhack).
     for (const e of S.entities) {
-      if (!e.alive) continue;
+      if (!e.alive || e.team !== p.team) continue;
       g.fillStyle = e.isPlayer ? '#ffffff' : e.team === 'att' ? '#f0a830' : '#37b6a8';
       g.beginPath();
       g.arc(toX(e.pos.x), toY(e.pos.z), e.isPlayer ? 3.4 : 2.6, 0, Math.PI * 2);
       g.fill();
-      if (e.isPlayer) { // view wedge
+      if (e.isPlayer) {
         g.strokeStyle = 'rgba(255,255,255,0.7)';
         g.beginPath();
         g.moveTo(toX(e.pos.x), toY(e.pos.z));
@@ -207,7 +244,7 @@ export function createHud(S) {
         g.stroke();
       }
     }
-    if (S.charge.planted || S.charge.dropped) {
+    if (S.charge.planted || (S.charge.dropped && p.team === 'att')) {
       const cx = S.charge.planted ? S.charge.x : S.charge.dropped.x;
       const cz = S.charge.planted ? S.charge.z : S.charge.dropped.z;
       g.fillStyle = '#ff5030';

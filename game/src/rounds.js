@@ -1,10 +1,4 @@
 // Rounds and economy: the match state machine.
-//   buy (12 s, teams frozen at spawn, buy menu open)
-//   -> live (115 s: elimination, or the Charge gets planted)
-//   -> planted (35 s fuse: defuse it, wipe the defenders, or it detonates)
-//   -> over (5 s banner, payouts) -> next round, first to 7 takes the match.
-// Money: kill $300, plant $300, team win $3,000, loss $1,500, plant bonus
-// $800. Dying drops your primary and sniper — the economy bites.
 import * as THREE from 'three';
 import { WEAPONS, NADE_DEFS, ARMOR_PRICE, START_MONEY, freshWeapon } from './weapons.js';
 import { orderMove, orderHold, resetCombatant } from './bots.js';
@@ -15,6 +9,7 @@ export const PLANT_TIME = 3.2;
 export const DEFUSE_TIME = 5;
 export const BOMB_TIME = 35;
 export const WIN_SCORE = 7;
+export const HALFTIME_ROUND = 6;
 const WIN_PAY = 3000;
 const LOSS_PAY = 1500;
 
@@ -57,7 +52,6 @@ export function createRounds(S) {
     if (e.armor < 100 && e.money >= ARMOR_PRICE) { e.money -= ARMOR_PRICE; e.armor = 100; }
     if (e.nades.frag === 0 && e.money >= NADE_DEFS.frag.price + 400) { e.money -= NADE_DEFS.frag.price; e.nades.frag = 1; }
     if (e.nades.smoke === 0 && e.money >= NADE_DEFS.smoke.price + 900 && S.rng() > 0.5) { e.money -= NADE_DEFS.smoke.price; e.nades.smoke = 1; }
-    // Carry the best gun owned.
     e.current = e.weapons.sniper || e.weapons.primary || e.weapons.pistol;
   }
 
@@ -72,9 +66,8 @@ export function createRounds(S) {
       e.current = e.weapons.pistol;
       e.stats = { shots: 0, hits: 0, kills: 0 };
     }
-    // One designated marksman per team may save for the Ibis.
     const att = S.entities.filter((e) => e.team === 'att' && !e.isPlayer);
-    const def = S.entities.filter((e) => e.team === 'def');
+    const def = S.entities.filter((e) => e.team === 'def' && !e.isPlayer);
     if (att[1]) att[1].ai.sniperRole = true;
     if (def[2]) def[2].ai.sniperRole = true;
   }
@@ -89,6 +82,20 @@ export function createRounds(S) {
 
   function nextRound() {
     S.round += 1;
+    // Halftime side swap & pistol economy reset at round 7.
+    if (S.round === HALFTIME_ROUND + 1 && typeof S.switchSides === 'function') {
+      S.switchSides();
+      for (const e of S.entities) {
+        e.money = START_MONEY;
+        e.armor = 0;
+        e.nades = { frag: 0, smoke: 0 };
+        e.weapons.primary = null;
+        e.weapons.sniper = null;
+        e.weapons.pistol = freshWeapon('pistol');
+        e.current = e.weapons.pistol;
+      }
+    }
+
     S.noise.length = 0;
     S.charge.carrier = null;
     S.charge.planted = false;
@@ -96,25 +103,41 @@ export function createRounds(S) {
     S.charge.channel = null;
     S.charge.dropped = null;
     chargeMesh.visible = false;
-    // Respawn everyone on their marks, attackers facing north, Wardens south.
-    S.entities.forEach((e, i) => {
-      const spawn = M.spawns[e.team][e.team === 'att' ? i : i - 5] || M.spawns[e.team][0];
+
+    // Fix spawn indexing regardless of player team or halftime side-swap.
+    const teamCounters = { att: 0, def: 0 };
+    for (const e of S.entities) {
+      const idx = teamCounters[e.team];
+      teamCounters[e.team] += 1;
+      const spawns = M.spawns[e.team];
+      const spawn = spawns[idx % spawns.length] || spawns[0];
       resetCombatant(e, spawn, e.team === 'att' ? 0 : Math.PI);
-    });
-    // The Charge goes to the player one round in three, else a random bot.
+    }
+
     const attackers = alive('att');
-    const carrier = S.rng() < 0.34 ? player() : attackers[Math.floor(S.rng() * attackers.length)];
+    const p = player();
+    const carrier = (p.team === 'att' && S.rng() < 0.34)
+      ? p
+      : attackers[Math.floor(S.rng() * attackers.length)];
     carrier.hasCharge = true;
     S.charge.carrier = carrier;
     S.targetSite = S.rng() > 0.5 ? 'A' : 'B';
+
     for (const e of S.entities) if (!e.isPlayer) botBuy(e);
     S.phase = 'buy';
     S.phaseT = BUY_TIME;
-    S.hud.banner(`ROUND ${S.round}`, carrier.isPlayer ? 'You carry the Charge' : `${carrier.name} carries the Charge`, 2600);
+
+    const sub = S.round === HALFTIME_ROUND + 1
+      ? `HALFTIME SWAP — You are now ${p.team === 'att' ? 'VANGUARD (Attack)' : 'WARDENS (Defend)'}`
+      : p.team === 'def'
+        ? 'Defend Sites A & B from Vanguard'
+        : carrier.isPlayer
+          ? 'You carry the Charge'
+          : `${carrier.name} carries the Charge`;
+    S.hud.banner(`ROUND ${S.round}`, sub, 2800);
     S.hud.showBuy(true);
   }
 
-  // Movement orders go out when the buy phase ends so the freeze is real.
   function startLive() {
     S.phase = 'live';
     S.phaseT = ROUND_TIME;
@@ -128,11 +151,10 @@ export function createRounds(S) {
       if (e.team === 'att') {
         if (e.hasCharge) { orderMove(S, e, siteNode, 'plant'); continue; }
         pushers += 1;
-        if (pushers === 3) orderMove(S, e, M.WP.mid, 'advance'); // the lurker works mid
-        else if (pushers === 4) orderMove(S, e, otherNode, 'advance'); // late flank
+        if (pushers === 3) orderMove(S, e, M.WP.mid, 'advance');
+        else if (pushers === 4) orderMove(S, e, otherNode, 'advance');
         else orderMove(S, e, siteNode, 'holdsite');
       } else {
-        // Wardens: two hold each site, one watches mid.
         const idx = S.entities.filter((x) => x.team === 'def').indexOf(e);
         if (idx < 2) { e.ai.hold = M.holds.A[idx]; orderMove(S, e, M.WP.aSite, 'hold'); }
         else if (idx < 4) { e.ai.hold = M.holds.B[idx - 2]; orderMove(S, e, M.WP.bSite, 'hold'); }
@@ -145,7 +167,6 @@ export function createRounds(S) {
     const ai = e.ai;
     if (e.team === 'att' && e.hasCharge && !S.charge.planted) { ai.state = 'plant'; return; }
     if (S.charge.planted && e.team === 'def') {
-      const site = S.charge.site;
       const d = Math.hypot(e.pos.x - S.charge.x, e.pos.z - S.charge.z);
       if (d < 2.2) { ai.state = 'defuse'; return; }
     }
@@ -167,6 +188,7 @@ export function createRounds(S) {
     S.phase = 'over';
     S.phaseT = 5;
     S.charge.channel = null;
+    S.hud.plantBar(null);
     const won = (winner === 'att') === (player().team === 'att');
     const label = winner === 'att' ? 'VANGUARD' : 'WARDENS';
     const sub = {
@@ -188,8 +210,7 @@ export function createRounds(S) {
     const d = Math.hypot(e.pos.x - site.x, e.pos.z - site.z);
     if (d > site.r) {
       S.charge.channel = null;
-      // A bot that starts its channel outside the zone walks back in first,
-      // rather than standing in the plant state forever.
+      if (e.isPlayer) S.hud.plantBar(null);
       if (!e.isPlayer) {
         e.ai.state = 'advance';
         orderMove(S, e, S.targetSite === 'A' ? M.WP.aSite : M.WP.bSite, 'plant');
@@ -215,12 +236,12 @@ export function createRounds(S) {
       S.charge.carrier = null;
       e.money += 300;
       chargeMesh.visible = true;
-      chargeMesh.position.set(S.charge.x, 0, S.charge.z);
+      chargeMesh.position.set(S.charge.x, e.pos.y, S.charge.z);
       S.phase = 'planted';
       S.phaseT = BOMB_TIME;
       S.hud.banner('CHARGE PLANTED', `Site ${S.targetSite} — ${BOMB_TIME} seconds`, 2400);
       S.audio.beep(1560);
-      // Wardens rotate: the two nearest go to defuse, the rest cover the site.
+
       const defs = alive('def').sort((a, b) =>
         Math.hypot(a.pos.x - S.charge.x, a.pos.z - S.charge.z) - Math.hypot(b.pos.x - S.charge.x, b.pos.z - S.charge.z));
       defs.forEach((def, i) => {
@@ -228,7 +249,6 @@ export function createRounds(S) {
         if (i < 2) orderMove(S, def, S.targetSite === 'A' ? M.WP.aSite : M.WP.bSite, 'defuse');
         else { def.ai.hold = M.holds[S.targetSite][i % 3]; orderMove(S, def, S.targetSite === 'A' ? M.WP.aSite : M.WP.bSite, 'hold'); }
       });
-      // Attackers settle onto the site.
       for (const att of alive('att')) {
         if (att.isPlayer || att === e) continue;
         att.ai.hold = M.holds[S.targetSite][Math.floor(S.rng() * 3)];
@@ -239,7 +259,12 @@ export function createRounds(S) {
 
   function channelDefuse(e, dt) {
     const d = Math.hypot(e.pos.x - S.charge.x, e.pos.z - S.charge.z);
-    if (d > 2.2 || !S.charge.planted) { S.charge.channel = null; e.ai.state = 'idle'; return; }
+    if (d > 2.4 || !S.charge.planted) {
+      S.charge.channel = null;
+      if (e.isPlayer) S.hud.plantBar(null);
+      if (e.ai) e.ai.state = 'idle';
+      return;
+    }
     if (!S.charge.channel || S.charge.channel.by !== e) {
       S.charge.channel = { by: e, kind: 'defuse', t: 0 };
       S.audio.beep(980);
@@ -247,13 +272,15 @@ export function createRounds(S) {
     const ch = S.charge.channel;
     ch.t += dt;
     if (Math.floor(ch.t * 2) !== Math.floor((ch.t - dt) * 2)) S.audio.beep(1320);
+    if (e.isPlayer) S.hud.plantBar(ch.t / DEFUSE_TIME, 'DEFUSING');
     if (ch.t >= DEFUSE_TIME) {
       S.charge.channel = null;
+      if (e.isPlayer) S.hud.plantBar(null);
+      if (e.alive) e.money += 300;
       endRound('def', 'defuse');
     }
   }
 
-  // Death drops the big guns (see the header) and frees the Charge.
   function onDeath(victim, killer) {
     if (S.charge.channel && S.charge.channel.by === victim) {
       S.charge.channel = null;
@@ -269,7 +296,7 @@ export function createRounds(S) {
       S.charge.carrier = null;
       S.charge.dropped = { x: victim.pos.x, z: victim.pos.z };
       chargeMesh.visible = true;
-      chargeMesh.position.set(victim.pos.x, 0, victim.pos.z);
+      chargeMesh.position.set(victim.pos.x, victim.pos.y, victim.pos.z);
     }
   }
 
@@ -298,7 +325,6 @@ export function createRounds(S) {
   }
 
   function update(dt) {
-    // A dropped Charge is picked up by the first attacker to reach it.
     if (S.charge.dropped && !S.charge.planted) {
       for (const e of alive('att')) {
         if (Math.hypot(e.pos.x - S.charge.dropped.x, e.pos.z - S.charge.dropped.z) < 1.3) {
@@ -313,7 +339,7 @@ export function createRounds(S) {
     }
     if (S.charge.planted) {
       chargeLamp.material.emissiveIntensity = (Math.sin(S.time * 9) > 0 ? 3.4 : 0.4);
-      if (S.phaseT < 10) { // the fuse accelerates its beeping under 10 s
+      if (S.phaseT < 10) {
         const beat = Math.floor(S.time * (S.phaseT < 5 ? 6 : 3));
         if (beat !== update.lastBeat) { update.lastBeat = beat; S.audio.beep(1420); }
       }
