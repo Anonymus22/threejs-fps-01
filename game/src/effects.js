@@ -1,7 +1,5 @@
-// Effects: pooled tracers, impact sparks, muzzle flashes, explosions and
-// smoke clouds. Everything is preallocated and recycled — the update loop
-// allocates nothing. Smoke clouds are also gameplay: bots check them when
-// they test line of sight (see physics.losClear).
+// Effects: pooled tracers, impact sparks, bullet hole decals, muzzle flashes,
+// shell casings, explosions and 3D-elevated smoke clouds.
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import { puffTexture } from './textures.js';
@@ -22,9 +20,8 @@ function glowTexture() {
 
 export function createEffects(scene) {
   const glow = glowTexture();
-  const up = new THREE.Vector3(0, 1, 0);
 
-  // Tracers: thin stretched boxes flying the shot line for a blink.
+  // Tracers.
   const tracerGeo = new THREE.BoxGeometry(0.025, 0.025, 1);
   const tracerMat = new THREE.MeshBasicMaterial({ color: P.tracer, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
   const tracers = [];
@@ -36,7 +33,7 @@ export function createEffects(scene) {
   }
   let tracerIdx = 0;
 
-  // Sparks: small glowing boxes with velocity and gravity.
+  // Sparks.
   const sparkGeo = new THREE.BoxGeometry(0.05, 0.05, 0.05);
   const sparks = [];
   for (let i = 0; i < 60; i += 1) {
@@ -47,7 +44,19 @@ export function createEffects(scene) {
   }
   let sparkIdx = 0;
 
-  // Muzzle flashes: camera-facing glow quads plus one shared point light.
+  // Persistent bullet impact scorch marks (pooled).
+  const markGeo = new THREE.BoxGeometry(0.11, 0.11, 0.11);
+  const markMat = new THREE.MeshBasicMaterial({ color: 0x1b1d21, transparent: true, opacity: 0.72 });
+  const marks = [];
+  for (let i = 0; i < 48; i += 1) {
+    const m = new THREE.Mesh(markGeo, markMat);
+    m.visible = false;
+    scene.add(m);
+    marks.push({ mesh: m, life: 0 });
+  }
+  let markIdx = 0;
+
+  // Muzzle flashes.
   const flashMat = new THREE.MeshBasicMaterial({ map: glow, color: P.muzzle, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   const flashes = [];
   for (let i = 0; i < 10; i += 1) {
@@ -60,11 +69,9 @@ export function createEffects(scene) {
   const flashLight = new THREE.PointLight(0xffbe78, 0, 11, 1.6);
   scene.add(flashLight);
 
-  // Smoke clouds (gameplay objects, see the header): clusters of big soft
-  // puff sprites that read as one stylised dust wall. The entry's pos/r are
-  // the logical sphere losClear tests against — same radius as ever.
+  // Smoke clouds (respects landing elevation pos.y).
   const puffTex = puffTexture();
-  const PUFFS = [ // [x, y, z, size] in metres around the centre, for r = 3.4
+  const PUFFS = [
     [0, 0.1, 0, 3.4], [-1.5, -0.3, 0.5, 2.7], [1.5, -0.2, -0.4, 2.9],
     [-0.8, 0.8, -0.8, 2.5], [0.9, 0.9, 0.8, 2.4], [0, -0.6, 1.2, 2.3],
     [-1.9, 0.5, -1.1, 2.1], [1.9, 0.6, 1.2, 2.0], [0.1, 1.3, 0, 2.0],
@@ -84,13 +91,11 @@ export function createEffects(scene) {
     smokes.push({ mesh: grp, mat, pos: grp.position, r: 3.4, t: 0, active: false, spin: i * 1.13 });
   }
 
-  // Explosion flash: one big glow sphere reused.
+  // Explosion flash.
   const boom = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ map: glow, color: 0xffa050, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   boom.visible = false;
   scene.add(boom);
   let boomLife = 0;
-
-  const tmp = new THREE.Vector3();
 
   function burst(pos, color, count, speed, life) {
     for (let n = 0; n < count; n += 1) {
@@ -118,6 +123,14 @@ export function createEffects(scene) {
     },
     impact(pos, flesh) {
       burst(pos, flesh ? 0xd84a38 : 0xd8c9a0, flesh ? 7 : 5, flesh ? 2.4 : 3.2, 0.32);
+      if (!flesh) {
+        const mk = marks[markIdx];
+        markIdx = (markIdx + 1) % marks.length;
+        mk.mesh.visible = true;
+        mk.mesh.position.copy(pos);
+        mk.mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+        mk.life = 14;
+      }
     },
     muzzle(pos, cameraPos) {
       const f = flashes[flashIdx];
@@ -147,7 +160,7 @@ export function createEffects(scene) {
       s.r = radius;
       s.t = time;
       s.mesh.visible = true;
-      s.mesh.position.set(pos.x, 1.3, pos.z);
+      s.mesh.position.set(pos.x, (pos.y || 0) + 1.3, pos.z);
       s.mesh.scale.setScalar(radius / 3.4);
       s.mesh.rotation.y = s.spin;
       s.mat.opacity = 0;
@@ -168,6 +181,11 @@ export function createEffects(scene) {
         if (s.mesh.position.y < 0.03) { s.mesh.position.y = 0.03; s.vel.y *= -0.4; }
         s.mesh.material.opacity = Math.min(1, s.life * 3);
       }
+      for (const mk of marks) {
+        if (mk.life <= 0) continue;
+        mk.life -= dt;
+        if (mk.life <= 0) mk.mesh.visible = false;
+      }
       for (const f of flashes) {
         if (f.life <= 0) continue;
         f.life -= dt;
@@ -186,7 +204,7 @@ export function createEffects(scene) {
         s.t -= dt;
         const target = s.t > 1 ? 0.92 : Math.max(0, s.t) * 0.92;
         s.mat.opacity += (target - s.mat.opacity) * Math.min(1, dt * 5);
-        s.mesh.rotation.y += dt * 0.06; // slow billow, no allocation
+        s.mesh.rotation.y += dt * 0.06;
         if (s.t <= 0) { s.active = false; s.mesh.visible = false; }
       }
     },

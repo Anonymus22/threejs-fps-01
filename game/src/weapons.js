@@ -1,7 +1,4 @@
-// Weapon data and the first-person viewmodel. Damage is hitscan; `spread`
-// is the base cone in radians, `moveSpread` is added in full while moving
-// at run speed, and `bloom` accumulates per shot — standing still and
-// tapping is the accurate way to play, spraying on the move is not.
+// Weapon data and the first-person viewmodel with ADS, reload & equip animations.
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 
@@ -38,26 +35,22 @@ export const NADE_DEFS = {
 export const ARMOR_PRICE = 650;
 export const START_MONEY = 800;
 
-// A fresh runtime copy of a weapon for one combatant.
 export function freshWeapon(id) {
   const def = WEAPONS[id];
-  return { def, mag: def.mag, reserve: def.reserve, nextShotAt: 0, reloadUntil: 0, bloom: 0 };
+  return { def, mag: def.mag, reserve: def.reserve, nextShotAt: 0, reloadUntil: 0, equipUntil: 0, bloom: 0 };
 }
 
-// Damage after distance falloff (head multiplier applied by the caller).
 export function damageAt(def, dist) {
   const f = Math.max(def.falloff, 1 - dist / 110);
   return def.dmg * f;
 }
 
 // --- Viewmodel -------------------------------------------------------------
-// Simple built-from-boxes guns parented to the camera, one group per weapon,
-// with a muzzle anchor for flash/tracer origins, a recoil spring and a
-// walk-bob/sway update. No external models.
-const gunMat = new THREE.MeshStandardMaterial({ color: P.gunmetal, roughness: 0.45, metalness: 0.55 });
-const accMat = new THREE.MeshStandardMaterial({ color: P.gunAccent, roughness: 0.5, metalness: 0.4 });
+const gunMat = new THREE.MeshStandardMaterial({ color: P.gunmetal, roughness: 0.42, metalness: 0.62 });
+const accMat = new THREE.MeshStandardMaterial({ color: P.gunAccent, roughness: 0.48, metalness: 0.45 });
 const polyMat = new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.72, metalness: 0.15 });
 const tanMat = new THREE.MeshStandardMaterial({ color: 0x8a6f4d, roughness: 0.62, metalness: 0.1 });
+const opticGlassMat = new THREE.MeshBasicMaterial({ color: 0x29c7ac, transparent: true, opacity: 0.45 });
 const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x6f7a58, roughness: 0.95, metalness: 0 });
 const gloveMat = new THREE.MeshStandardMaterial({ color: 0x35322e, roughness: 0.85, metalness: 0.05 });
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -83,69 +76,80 @@ function tube(group, mat, x, y, z, r, len) {
 
 function buildGun(id) {
   const g = new THREE.Group();
+  let magMesh = null;
+
   if (id === 'pistol') {
     part(g, gunMat, 0, 0, -0.1, 0.062, 0.1, 0.26);
-    part(g, accMat, 0, 0.052, -0.2, 0.048, 0.036, 0.11); // two-tone slide
-    part(g, polyMat, 0, -0.02, 0.05, 0.058, 0.11, 0.11); // polymer frame
-    part(g, accMat, 0, -0.085, -0.03, 0.056, 0.1, 0.078);
-    part(g, gunMat, 0, 0.088, -0.03, 0.036, 0.03, 0.05); // rear sight
-    part(g, gunMat, 0, 0.084, -0.245, 0.014, 0.034, 0.02); // front post
-    part(g, gloveMat, 0, -0.145, -0.01, 0.062, 0.1, 0.085); // both hands on the grip
-    part(g, sleeveMat, 0.07, -0.23, 0.05, 0.08, 0.08, 0.24, 0.55); // forearm
+    part(g, accMat, 0, 0.052, -0.2, 0.048, 0.036, 0.11);
+    part(g, polyMat, 0, -0.02, 0.05, 0.058, 0.11, 0.11);
+    magMesh = part(g, accMat, 0, -0.085, -0.03, 0.056, 0.1, 0.078);
+    part(g, gunMat, 0, 0.088, -0.03, 0.036, 0.03, 0.05);
+    part(g, gunMat, 0, 0.084, -0.245, 0.014, 0.034, 0.02);
+    part(g, gloveMat, 0, -0.145, -0.01, 0.062, 0.1, 0.085);
+    part(g, sleeveMat, 0.07, -0.23, 0.05, 0.08, 0.08, 0.24, 0.55);
   } else if (id === 'smg') {
     part(g, gunMat, 0, 0, -0.16, 0.075, 0.095, 0.44);
     part(g, gunMat, 0, 0, -0.42, 0.042, 0.042, 0.15);
-    tube(g, polyMat, 0, 0, -0.56, 0.032, 0.16); // suppressor
-    part(g, accMat, 0, 0.066, -0.18, 0.024, 0.02, 0.32); // top rail
-    part(g, accMat, 0, -0.11, -0.14, 0.052, 0.14, 0.068);
-    part(g, polyMat, 0, -0.115, -0.33, 0.048, 0.12, 0.052); // foregrip
+    tube(g, polyMat, 0, 0, -0.56, 0.032, 0.16);
+    part(g, accMat, 0, 0.066, -0.18, 0.024, 0.02, 0.32);
+    // Holo reflex sight
+    part(g, polyMat, 0, 0.095, -0.14, 0.042, 0.038, 0.065);
+    part(g, opticGlassMat, 0, 0.096, -0.14, 0.032, 0.026, 0.004);
+    magMesh = part(g, accMat, 0, -0.11, -0.14, 0.052, 0.14, 0.068);
+    part(g, polyMat, 0, -0.115, -0.33, 0.048, 0.12, 0.052);
     part(g, accMat, 0, 0.062, -0.2, 0.036, 0.034, 0.11);
     part(g, gunMat, 0, -0.02, 0.1, 0.058, 0.058, 0.13);
-    part(g, polyMat, 0, -0.01, 0.19, 0.056, 0.064, 0.11); // extended stock
-    part(g, gloveMat, 0, -0.165, -0.33, 0.07, 0.075, 0.1); // support hand
-    part(g, sleeveMat, 0.09, -0.25, -0.22, 0.082, 0.082, 0.3, 0.5); // forearm
-    part(g, gloveMat, 0, -0.075, 0.03, 0.062, 0.09, 0.075); // grip hand
+    part(g, polyMat, 0, -0.01, 0.19, 0.056, 0.064, 0.11);
+    part(g, gloveMat, 0, -0.165, -0.33, 0.07, 0.075, 0.1);
+    part(g, sleeveMat, 0.09, -0.25, -0.22, 0.082, 0.082, 0.3, 0.5);
+    part(g, gloveMat, 0, -0.075, 0.03, 0.062, 0.09, 0.075);
   } else if (id === 'sniper') {
     part(g, gunMat, 0, 0, -0.24, 0.078, 0.1, 0.57);
     part(g, gunMat, 0, -0.01, -0.62, 0.036, 0.036, 0.3);
-    tube(g, accMat, 0, 0.098, -0.22, 0.032, 0.18); // scope tube
-    tube(g, gunMat, 0, 0.098, -0.315, 0.04, 0.032); // objective bell
-    part(g, gunMat, 0, 0.062, -0.28, 0.016, 0.032, 0.016); // scope rings
+    tube(g, accMat, 0, 0.098, -0.22, 0.032, 0.18);
+    tube(g, gunMat, 0, 0.098, -0.315, 0.04, 0.032);
+    part(g, gunMat, 0, 0.062, -0.28, 0.016, 0.032, 0.016);
     part(g, gunMat, 0, 0.062, -0.16, 0.016, 0.032, 0.016);
-    part(g, accMat, 0, -0.1, -0.18, 0.052, 0.12, 0.068);
-    part(g, tanMat, 0, 0.052, 0.1, 0.064, 0.04, 0.13); // cheek rest
+    magMesh = part(g, accMat, 0, -0.1, -0.18, 0.052, 0.12, 0.068);
+    part(g, tanMat, 0, 0.052, 0.1, 0.064, 0.04, 0.13);
     part(g, gunMat, 0, -0.03, 0.12, 0.058, 0.058, 0.15);
-    part(g, polyMat, -0.05, -0.15, -0.52, 0.016, 0.17, 0.016, 0, 0.45); // bipod legs
+    part(g, polyMat, -0.05, -0.15, -0.52, 0.016, 0.17, 0.016, 0, 0.45);
     part(g, polyMat, 0.05, -0.15, -0.52, 0.016, 0.17, 0.016, 0, -0.45);
-    part(g, gloveMat, 0, -0.095, -0.44, 0.07, 0.07, 0.11); // support hand
-    part(g, sleeveMat, 0.09, -0.2, -0.3, 0.082, 0.082, 0.3, 0.5); // forearm
-    part(g, gloveMat, 0, -0.08, 0.04, 0.062, 0.09, 0.075); // grip hand
+    part(g, gloveMat, 0, -0.095, -0.44, 0.07, 0.07, 0.11);
+    part(g, sleeveMat, 0.09, -0.2, -0.3, 0.082, 0.082, 0.3, 0.5);
+    part(g, gloveMat, 0, -0.08, 0.04, 0.062, 0.09, 0.075);
   } else if (id === 'nade') {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: 0x51683c, roughness: 0.6 }));
     ball.position.set(0.01, -0.02, -0.12);
     g.add(ball);
     part(g, accMat, 0.01, 0.035, -0.12, 0.02, 0.03, 0.02);
   } else {
-    // rifle — chunky stylised proportions, bold shapes first
+    // Harrier AR-12 with tactical red-dot reflex optic & muzzle brake
     part(g, gunMat, 0, 0, -0.22, 0.082, 0.108, 0.54);
     part(g, gunMat, 0, 0.005, -0.56, 0.044, 0.044, 0.19);
-    part(g, polyMat, 0, 0.002, -0.41, 0.098, 0.1, 0.27); // polymer handguard
-    part(g, accMat, 0, 0.074, -0.3, 0.026, 0.024, 0.44); // top rail
-    part(g, tanMat, 0, -0.135, -0.2, 0.056, 0.17, 0.078, 0.1); // curved magazine
-    part(g, accMat, 0, 0.082, -0.28, 0.03, 0.052, 0.036); // front sight post
-    part(g, gunMat, 0, 0.088, -0.06, 0.048, 0.042, 0.024); // rear sight block
+    part(g, accMat, 0, 0.005, -0.66, 0.052, 0.052, 0.045); // muzzle brake
+    part(g, polyMat, 0, 0.002, -0.41, 0.098, 0.1, 0.27);
+    part(g, accMat, 0, 0.074, -0.3, 0.026, 0.024, 0.44);
+    // Reflex red-dot sight on top rail
+    part(g, polyMat, 0, 0.105, -0.14, 0.046, 0.044, 0.08);
+    part(g, opticGlassMat, 0, 0.107, -0.14, 0.036, 0.03, 0.004);
+    magMesh = part(g, tanMat, 0, -0.135, -0.2, 0.056, 0.17, 0.078, 0.1);
+    part(g, accMat, 0, 0.082, -0.28, 0.03, 0.052, 0.036);
+    part(g, gunMat, 0, 0.088, -0.06, 0.048, 0.042, 0.024);
     part(g, gunMat, 0, -0.02, 0.11, 0.06, 0.06, 0.15);
-    part(g, polyMat, 0, -0.01, 0.02, 0.068, 0.088, 0.14); // grip/trigger guard mass
+    part(g, polyMat, 0, -0.01, 0.02, 0.068, 0.088, 0.14);
     part(g, accMat, 0, -0.01, -0.02, 0.066, 0.082, 0.11);
-    part(g, gloveMat, 0, -0.105, -0.44, 0.078, 0.075, 0.115); // support hand
-    part(g, sleeveMat, 0.095, -0.21, -0.31, 0.088, 0.088, 0.32, 0.5); // forearm
-    part(g, gloveMat, 0, -0.082, 0.03, 0.066, 0.095, 0.08); // grip hand
+    part(g, gloveMat, 0, -0.105, -0.44, 0.078, 0.075, 0.115);
+    part(g, sleeveMat, 0.095, -0.21, -0.31, 0.088, 0.088, 0.32, 0.5);
+    part(g, gloveMat, 0, -0.082, 0.03, 0.066, 0.095, 0.08);
   }
-  g.scale.setScalar(1.1); // bold, readable silhouette
+  g.scale.setScalar(1.1);
   const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0.01, id === 'sniper' ? -0.78 : id === 'pistol' ? -0.26 : -0.62);
+  muzzle.position.set(0, 0.01, id === 'sniper' ? -0.78 : id === 'pistol' ? -0.26 : -0.66);
   g.add(muzzle);
   g.userData.muzzle = muzzle;
+  g.userData.mag = magMesh;
+  g.userData.magBaseY = magMesh ? magMesh.position.y : 0;
   return g;
 }
 
@@ -173,14 +177,38 @@ export function createViewmodel(camera) {
       groups[id].visible = true;
     },
     kick(amount) { kick = Math.min(1, kick + amount); },
-    update(dt, speed, grounded, lookX) {
+    // Supports both legacy lookX (number) and polished state { aimAlpha, reloadRatio, lookX }.
+    update(dt, speed, grounded, state = 0) {
       kick = Math.max(0, kick - dt * 7);
       bobT += dt * (4 + speed * 1.6);
-      const bob = grounded && speed > 0.4 ? Math.sin(bobT) * 0.011 * Math.min(1, speed / 5) : 0;
-      root.position.z = -0.45 + kick * 0.07;
-      root.position.y = -0.235 + bob - kick * 0.012;
-      root.rotation.x = kick * 0.14;
-      root.rotation.z = THREE.MathUtils.clamp(-lookX * 0.0016, -0.05, 0.05);
+
+      const isObj = typeof state === 'object' && state !== null;
+      const aimAlpha = isObj ? (state.aimAlpha || 0) : 0;
+      const reloadRatio = isObj ? (state.reloadRatio || 0) : (state > 0 && state <= 1 ? state : 0);
+      const lookX = isObj ? (state.lookX || 0) : (Math.abs(state) > 1 ? state : 0);
+
+      // Reload tilt & magazine drop animation.
+      const reloadArc = reloadRatio > 0 ? Math.sin(reloadRatio * Math.PI) : 0;
+      const g = groups[current];
+      if (g && g.userData.mag) {
+        g.userData.mag.position.y = g.userData.magBaseY - reloadArc * 0.14;
+      }
+
+      // ADS centering (pulls sight closer to screen center when aiming).
+      const adsBlend = aimAlpha * (1 - reloadArc);
+      const baseX = THREE.MathUtils.lerp(0.26, 0.11, adsBlend);
+      const baseY = THREE.MathUtils.lerp(-0.235, -0.175, adsBlend);
+      const baseZ = THREE.MathUtils.lerp(-0.45, -0.37, adsBlend);
+
+      const bobScale = THREE.MathUtils.lerp(1, 0.25, adsBlend);
+      const bob = grounded && speed > 0.4 ? Math.sin(bobT) * 0.011 * Math.min(1, speed / 5) * bobScale : 0;
+      const swayX = grounded && speed > 0.4 ? Math.cos(bobT * 0.5) * 0.007 * Math.min(1, speed / 5) * bobScale : 0;
+
+      root.position.x = baseX + swayX;
+      root.position.z = baseZ + kick * 0.07;
+      root.position.y = baseY + bob - kick * 0.012 - reloadArc * 0.04;
+      root.rotation.x = kick * 0.14 - reloadArc * 0.28;
+      root.rotation.z = THREE.MathUtils.clamp(-lookX * 0.0016, -0.05, 0.05) + reloadArc * 0.35;
     },
   };
 }

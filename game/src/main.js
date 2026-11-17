@@ -787,7 +787,7 @@ function frame(now) {
   const reloadRatio = player.current && player.current.reloadUntil
     ? 1 - Math.max(0, (player.current.reloadUntil - S.time) / player.current.def.reload)
     : 0;
-  viewmodel.update(dt, speed, player.grounded, Math.max(player.aimAlpha, reloadRatio));
+  viewmodel.update(dt, speed, player.grounded, { aimAlpha: player.aimAlpha, reloadRatio, lookX: 0 });
   hud.refresh(dt);
   renderer.render(scene, camera);
 }

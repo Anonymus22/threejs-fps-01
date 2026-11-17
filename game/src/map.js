@@ -1,8 +1,5 @@
-// The Sable Yard: an original container depot. Three lanes (west, mid, east)
-// feed two charge sites in the north; the Vanguard spawn south, the Wardens
-// north between the sites. Every solid is an AABB collider {x, z, hx, hz, h}
-// and a matching box mesh, so what you see is exactly what blocks you.
-// Bots travel the waypoint graph; hold points name a spot and a look target.
+// The Sable Yard: an original container depot with rooftop access ramps,
+// elevated catwalks, and full 3D collider consistency.
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
 import {
@@ -20,17 +17,16 @@ function groundTexture() {
   c.width = 1024;
   c.height = 1024;
   const g = c.getContext('2d');
-  const S = 1024 / 64; // world is 64 x 64 m, centred on 0
+  const S = 1024 / 64;
   const px = (x) => (x + 32) * S;
   const pz = (z) => (z + 32) * S;
   g.fillStyle = P.ground;
   g.fillRect(0, 0, 1024, 1024);
-  // Sand speckle.
+
   for (let i = 0; i < 9000; i += 1) {
     g.fillStyle = Math.random() > 0.5 ? 'rgba(255,246,220,0.05)' : 'rgba(122,90,40,0.06)';
     g.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
   }
-  // Dusty tonal patches, so the sand is not one flat sheet.
   for (const [sx, sz, r, a] of [[-22, 8, 5, 0.09], [24, -2, 6, 0.07], [2, -18, 4, 0.08], [-6, 26, 5, 0.06], [18, 18, 4, 0.07]]) {
     const grad = g.createRadialGradient(px(sx), pz(sz), 4, px(sx), pz(sz), r * S);
     grad.addColorStop(0, `rgba(133,102,52,${a})`);
@@ -38,7 +34,6 @@ function groundTexture() {
     g.fillStyle = grad;
     g.fillRect(px(sx) - r * S, pz(sz) - r * S, r * S * 2, r * S * 2);
   }
-  // Expansion joints: a faint grid that gives the yard its scale.
   g.strokeStyle = 'rgba(120,90,40,0.10)';
   g.lineWidth = 2;
   for (let m = -32; m <= 32; m += 8) {
@@ -51,7 +46,6 @@ function groundTexture() {
     g.lineTo(1024, pz(m));
     g.stroke();
   }
-  // Worn lane dashes down the three lanes and the south apron.
   g.fillStyle = P.lanePaint;
   g.globalAlpha = 0.5;
   for (let z = -28; z < 28; z += 4) {
@@ -60,7 +54,6 @@ function groundTexture() {
     g.fillRect(px(0) - 1, pz(z), 2, 26);
   }
   g.globalAlpha = 1;
-  // Site rings and letters, painted big enough to read from anywhere.
   for (const [cx, col, letter] of [[-19, P.siteA, 'A'], [19, P.siteB, 'B']]) {
     g.strokeStyle = col;
     g.lineWidth = 7;
@@ -75,7 +68,6 @@ function groundTexture() {
     g.fillText(letter, px(cx), pz(-20) + 4);
     g.globalAlpha = 1;
   }
-  // Spawn aprons.
   g.fillStyle = 'rgba(240,168,48,0.13)';
   g.fillRect(px(-5), pz(23.5), 10 * S, 6.5 * S);
   g.fillStyle = 'rgba(55,182,168,0.13)';
@@ -108,11 +100,9 @@ function signTexture(letter, color) {
 
 export function createMap(scene) {
   const colliders = [];
-  const boxes = []; // for the minimap: {x, z, hx, hz}
+  const boxes = [];
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
-  // Procedural surfaces (see textures.js): one painted sheet per material,
-  // tinted by colour, so the steel and timber stop reading as flat paint.
   const corrugated = corrugatedTexture();
   const containerMats = new Map();
   function containerMat(color) {
@@ -139,18 +129,19 @@ export function createMap(scene) {
     boxes.push({ x, z, hx, hz });
     return mesh;
   }
-  // A container: body plus a darker lid line, reads as stacked steel.
+
   function container(x, z, hx, hz, color) {
     solid(x, z, hx, hz, 2.6, containerMat(color));
     const lid = new THREE.Mesh(boxGeo, mat(P.roof, 0.7));
     lid.scale.set(hx * 2 + 0.12, 0.14, hz * 2 + 0.12);
     lid.position.set(x, 2.67, z);
     lid.castShadow = true;
+    lid.receiveShadow = true;
     scene.add(lid);
   }
   const crate = (x, z, h = 1.15) => solid(x, z, 1.05, 1.05, h, h > 1.5 ? crateDarkMat : crateMat);
 
-  // Ground and the dark apron beyond the walls.
+  // Ground and outer desert apron.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(64, 64),
     new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 0.96 }),
@@ -163,9 +154,7 @@ export function createMap(scene) {
   apron.position.y = -0.05;
   scene.add(apron);
 
-  // Gradient sky dome with the sun's glow in a tiny shader: horizon haze,
-  // a warm band around the sun's azimuth, and the disc itself. Pure
-  // backdrop — no fog, no depth write, drawn inside the camera's far plane.
+  // Sky dome.
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
@@ -204,8 +193,6 @@ export function createMap(scene) {
   });
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(185, 24, 12), skyMat));
 
-  // A few soft billboard clouds drifting overhead (static: the shot
-  // poses must stay deterministic).
   const cloudTex = cloudTexture();
   for (const [x, y, z, s, o] of [[-60, 47, -70, 62, 0.4], [42, 53, -82, 74, 0.34], [-24, 58, 64, 68, 0.3], [72, 45, 28, 52, 0.36], [-84, 51, 6, 58, 0.3], [8, 63, -44, 84, 0.26]]) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, color: P.cloud, transparent: true, opacity: o, depthWrite: false, fog: false }));
@@ -220,19 +207,19 @@ export function createMap(scene) {
   solid(-31.5, 0, 0.5, 32, 5, wallDarkMat);
   solid(31.5, 0, 0.5, 32, 5, wallDarkMat);
 
-  // North-mid wall (Warden spawn behind it) with a centre door at |x| < 1.5.
+  // North-mid wall.
   solid(-8.75, -15.5, 6.75, 0.5, 3.4, wallMat);
   solid(8.75, -15.5, 6.75, 0.5, 3.4, wallMat);
 
-  // Site walls: east wall and south wall per site, each with one wide door.
+  // Site walls.
   for (const s of [-1, 1]) {
-    solid(s * 11, -25, 0.5, 2.5, 3.4, wallMat); // site east wall, north part
-    solid(s * 11, -15.5, 0.5, 2.5, 3.4, wallMat); // site east wall, south part (door z -22.5..-18)
-    solid(s * 26, -13, 4.5, 0.5, 3.4, wallMat); // site south wall, outer part
-    solid(s * 14, -13, 3, 0.5, 3.4, wallMat); // site south wall, inner part (door x 17..21.5)
+    solid(s * 11, -25, 0.5, 2.5, 3.4, wallMat);
+    solid(s * 11, -15.5, 0.5, 2.5, 3.4, wallMat);
+    solid(s * 26, -13, 4.5, 0.5, 3.4, wallMat);
+    solid(s * 14, -13, 3, 0.5, 3.4, wallMat);
   }
 
-  // Mid walls with a centre door each side, and the south dividers.
+  // Mid walls and south dividers.
   solid(-4.5, 7, 0.5, 8, 3.4, wallMat);
   solid(4.5, 7, 0.5, 8, 3.4, wallMat);
   solid(-4.5, -9.5, 0.5, 4.5, 3.4, wallMat);
@@ -242,12 +229,23 @@ export function createMap(scene) {
   solid(-16, 14, 0.5, 6, 3.4, wallDarkMat);
   solid(16, 14, 0.5, 6, 3.4, wallDarkMat);
 
-  // Cover: containers and crates.
+  // Containers and crates (including stepped climbable stacks onto container roofs).
   container(-19, -27.6, 4, 1.2, P.containerA);
   container(19, -27.6, 4, 1.2, P.containerB);
   container(-20, -5, 1.2, 3, P.containerC);
   container(20, -5, 1.2, 3, P.containerD);
   container(0, 21, 3.4, 1.2, P.containerB);
+
+  // Stepped crate ramps beside west/east containers so players can climb up for high-ground angles.
+  crate(-20, -9.0, 0.95);
+  crate(-19.6, -10.8, 1.85);
+  crate(20, -9.0, 0.95);
+  crate(19.6, -10.8, 1.85);
+  // Spawn container step-up: a two-step staircase up its west face (kept
+  // clear of the spawn waypoint fan by the graph check).
+  crate(-4.5, 21, 0.95);
+  crate(-4.5, 18.75, 1.85);
+
   crate(-24, -19, 2.3);
   crate(24, -19, 2.3);
   crate(-15.5, -18);
@@ -263,7 +261,7 @@ export function createMap(scene) {
   crate(-24, -16);
   crate(24, -16);
 
-  // Site signs on the walls facing the lanes.
+  // Site signs.
   for (const [x, z, ry, letter, col] of [
     [-10.4, -20, Math.PI / 2, 'A', P.siteA],
     [10.4, -20, -Math.PI / 2, 'B', P.siteB],
@@ -277,9 +275,7 @@ export function createMap(scene) {
     scene.add(sign);
   }
 
-  // Yard lamps: pole, emissive head, a glow sprite and a faint warm pool
-  // on the sand. Midday sun does the real lighting now — these are dressing,
-  // kept dim so they read as fixtures, not light sources.
+  // Yard lamps.
   const lampGeo = new THREE.CylinderGeometry(0.09, 0.12, 5.4, 6);
   const glowTex = glowTexture();
   const poolGeo = new THREE.CircleGeometry(3.4, 20);
@@ -311,7 +307,7 @@ export function createMap(scene) {
     scene.add(extra);
   }
 
-  // Distant depot silhouettes for the skyline, hazed by the midday fog.
+  // Distant skyline silhouettes.
   const skylineMat = new THREE.MeshBasicMaterial({ map: skylineTexture() });
   for (const [x, z, w, h] of [[-46, -44, 26, 13], [30, -48, 34, 17], [52, 6, 20, 11], [-52, 14, 22, 9], [4, -52, 22, 8]]) {
     const m = new THREE.Mesh(boxGeo, skylineMat);
@@ -320,11 +316,7 @@ export function createMap(scene) {
     scene.add(m);
   }
 
-  // --- Set dressing ------------------------------------------------------
-  // Barrels, sandbag lines and pallet stacks dress the yard's edges. Every
-  // spot was checked against the waypoint graph and the hold points below:
-  // nothing sits on a bot lane, and the solid props add colliders in the
-  // same AABB style as the cover above. Puddles are flat gloss only.
+  // Barrels (with consistent collider height).
   const barrelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.92, 12);
   const barrelBandGeo = new THREE.CylinderGeometry(0.335, 0.335, 0.1, 12);
   const barrelMats = [P.barrelRust, P.barrelSteel, P.barrelOlive].map(
@@ -394,8 +386,7 @@ export function createMap(scene) {
   palletStack(27, 8);
   palletStack(24, 26);
 
-  // Puddles: near-black, near-mirror discs that catch the sun's specular
-  // streak and the lamp pools. No collider — they are water, not cover.
+  // Puddles.
   const puddleMat = new THREE.MeshStandardMaterial({ color: P.puddle, roughness: 0.07, metalness: 0.05 });
   const puddleGeo = new THREE.CircleGeometry(1, 22);
   for (const [x, z, sx, sz] of [[-22, -6, 1.9, 1.1], [22, -6, 1.7, 1.2], [2.5, 17, 2.2, 1.3], [-13, -24.5, 1.5, 1], [16, 10, 1.6, 0.9]]) {
@@ -407,11 +398,7 @@ export function createMap(scene) {
     scene.add(p);
   }
 
-  // Palms: low-poly trees — a curved trunk of stacked segments under a
-  // crown of arcing frond planes. They ring the depot outside the walls
-  // and stand in the yard's corners and edges; every inside trunk was
-  // checked clear of the waypoint graph and hold points below, and
-  // carries a slim collider in the usual style.
+  // Palms.
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a7358, roughness: 1 });
   const frondMat = new THREE.MeshStandardMaterial({ color: 0x5e8f3e, roughness: 0.9, side: THREE.DoubleSide });
   const nutMat = new THREE.MeshStandardMaterial({ color: 0x6d5a35, roughness: 1 });
@@ -422,9 +409,9 @@ export function createMap(scene) {
     for (let i = 0; i < pos.count; i += 1) {
       const y0 = pos.getY(i);
       const t = y0 / 2.9;
-      pos.setX(i, pos.getX(i) * (1 - t * 0.72)); // taper to the tip
-      pos.setY(i, 0.38 * t - 1.02 * t * t); // rise, then droop
-      pos.setZ(i, y0); // length axis becomes +Z: the frond reaches out
+      pos.setX(i, pos.getX(i) * (1 - t * 0.72));
+      pos.setY(i, 0.38 * t - 1.02 * t * t);
+      pos.setZ(i, y0);
     }
     geo.computeVertexNormals();
     return geo;
@@ -463,14 +450,13 @@ export function createMap(scene) {
       boxes.push({ x, z, hx: 0.26, hz: 0.26 });
     }
   }
-  // Inside the walls: corners and lane edges, all off the bot graph.
   palm(-28.6, -28.6, 0.5, 0.4, 1.05, true);
   palm(28.6, -28.6, -0.4, 1.7, 0.95, true);
   palm(-28.6, 28.6, 0.3, 2.6, 1.1, true);
   palm(28.6, 28.6, -0.55, 0.9, 1.0, true);
   palm(-29.5, 6, 0.45, 1.2, 0.9, true);
   palm(29.5, 6, -0.3, 2.2, 1.08, true);
-  // Outside the walls: a loose ring in the desert.
+
   palm(-38, -20, 0.6, 0.2, 1.15, false);
   palm(38, -24, -0.5, 1.4, 1.05, false);
   palm(-40, 14, 0.35, 2.9, 0.95, false);
@@ -492,7 +478,6 @@ export function createMap(scene) {
       { x: 0, z: -26.5 }, { x: -2.6, z: -27.5 }, { x: 2.6, z: -27.5 }, { x: -1.4, z: -29 }, { x: 1.4, z: -29 },
     ],
   };
-  // Waypoint graph (see the header): index, position, neighbours.
   const nodes = [
     [0, 25], [-13, 20], [13, 20], [-22, 22], [-22, -2], [-22, -10], [-19, -19], [-25, -24],
     [0, 13], [0, -1], [0, -10], [0, -13.5], [0, -25], [0, -17.5], [-7, -20], [7, -20],
@@ -509,14 +494,11 @@ export function createMap(scene) {
     waypoints[a].edges.push(b);
     waypoints[b].edges.push(a);
   }
-  // Named indices for the AI and the round logic.
   const WP = {
     tSpawn: 0, tWest: 1, tEast: 2, laneWs: 3, laneWm: 4, laneWn: 5, aSite: 6, aBack: 7,
     midS: 8, mid: 9, midN: 10, doorS: 11, ctSpawn: 12, doorN: 13, aConn: 14, bConn: 15,
     laneEs: 16, laneEm: 17, laneEn: 18, bSite: 19, bBack: 20, linkW: 21, linkE: 22, aHold2: 23, bHold2: 24,
   };
-  // Defender holds: a spot plus the point to watch. Attackers reuse the site
-  // holds after a plant.
   const holds = {
     A: [
       { x: -25, z: -24, lx: -16, lz: -15 },
