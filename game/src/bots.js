@@ -22,6 +22,8 @@ const teamMat = {
   leg: new THREE.MeshStandardMaterial({ color: 0x33363c, roughness: 0.95 }),
   skin: new THREE.MeshStandardMaterial({ color: P.skin, roughness: 0.7 }),
   gun: new THREE.MeshStandardMaterial({ color: P.gunmetal, roughness: 0.5, metalness: 0.4 }),
+  visor: new THREE.MeshStandardMaterial({ color: 0x14181d, roughness: 0.25, metalness: 0.6 }),
+  boot: new THREE.MeshStandardMaterial({ color: 0x1d1f23, roughness: 0.9 }),
 };
 
 function part(group, mat, x, y, z, sx, sy, sz) {
@@ -39,13 +41,24 @@ export function createBotMesh(team) {
   const dark = teamMat[`${team}Dark`];
   part(g, teamMat.leg, -0.11, 0.4, 0, 0.17, 0.8, 0.2);
   part(g, teamMat.leg, 0.11, 0.4, 0, 0.17, 0.8, 0.2);
+  part(g, teamMat.boot, -0.11, 0.05, -0.02, 0.19, 0.1, 0.26); // boots
+  part(g, teamMat.boot, 0.11, 0.05, -0.02, 0.19, 0.1, 0.26);
   const torso = part(g, main, 0, 1.12, 0, 0.52, 0.62, 0.28);
   part(g, dark, 0, 1.14, -0.16, 0.44, 0.5, 0.06); // vest plate, faces -z
+  part(g, dark, -0.11, 1.06, -0.2, 0.16, 0.2, 0.05); // vest pouches
+  part(g, dark, 0.11, 1.06, -0.2, 0.16, 0.2, 0.05);
+  part(g, dark, 0, 1.15, 0.19, 0.4, 0.5, 0.12); // backpack
   part(g, teamMat.skin, 0, 1.62, 0, 0.24, 0.26, 0.24); // head
+  part(g, teamMat.visor, 0, 1.64, -0.125, 0.2, 0.07, 0.02); // visor strip
   part(g, dark, 0, 1.76, 0, 0.28, 0.1, 0.28); // helmet
+  part(g, dark, 0, 1.7, -0.02, 0.33, 0.04, 0.35); // helmet brim
   part(g, main, -0.33, 1.18, -0.05, 0.13, 0.5, 0.16); // arms
   part(g, main, 0.33, 1.18, -0.05, 0.13, 0.5, 0.16);
+  part(g, main, -0.34, 1.42, -0.02, 0.17, 0.1, 0.21); // shoulder pads
+  part(g, main, 0.34, 1.42, -0.02, 0.17, 0.1, 0.21);
   part(g, teamMat.gun, 0.3, 1.32, -0.34, 0.07, 0.09, 0.52); // rifle
+  part(g, teamMat.gun, 0.3, 1.17, -0.3, 0.05, 0.15, 0.06); // rifle magazine
+  part(g, teamMat.gun, 0.3, 1.34, -0.02, 0.06, 0.07, 0.16); // rifle stock
   g.userData.torso = torso;
   return g;
 }

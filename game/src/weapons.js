@@ -56,12 +56,25 @@ export function damageAt(def, dist) {
 // walk-bob/sway update. No external models.
 const gunMat = new THREE.MeshStandardMaterial({ color: P.gunmetal, roughness: 0.45, metalness: 0.55 });
 const accMat = new THREE.MeshStandardMaterial({ color: P.gunAccent, roughness: 0.5, metalness: 0.4 });
+const polyMat = new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.72, metalness: 0.15 });
+const tanMat = new THREE.MeshStandardMaterial({ color: 0x8a6f4d, roughness: 0.62, metalness: 0.1 });
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 10);
 
-function part(group, mat, x, y, z, sx, sy, sz) {
+function part(group, mat, x, y, z, sx, sy, sz, rx = 0, rz = 0) {
   const m = new THREE.Mesh(boxGeo, mat);
   m.position.set(x, y, z);
   m.scale.set(sx, sy, sz);
+  m.rotation.set(rx, 0, rz);
+  group.add(m);
+  return m;
+}
+
+function tube(group, mat, x, y, z, r, len) {
+  const m = new THREE.Mesh(cylGeo, mat);
+  m.position.set(x, y, z);
+  m.scale.set(r, len, r);
+  m.rotation.x = Math.PI / 2;
   group.add(m);
   return m;
 }
@@ -70,23 +83,33 @@ function buildGun(id) {
   const g = new THREE.Group();
   if (id === 'pistol') {
     part(g, gunMat, 0, 0, -0.1, 0.055, 0.09, 0.24);
-    part(g, gunMat, 0, 0.045, -0.2, 0.04, 0.035, 0.1);
+    part(g, accMat, 0, 0.048, -0.2, 0.042, 0.032, 0.1); // two-tone slide
+    part(g, polyMat, 0, -0.02, 0.05, 0.052, 0.1, 0.1); // polymer frame
     part(g, accMat, 0, -0.085, -0.03, 0.05, 0.09, 0.07);
+    part(g, gunMat, 0, 0.082, -0.03, 0.032, 0.028, 0.045); // rear sight
+    part(g, gunMat, 0, 0.078, -0.235, 0.012, 0.03, 0.018); // front post
   } else if (id === 'smg') {
     part(g, gunMat, 0, 0, -0.16, 0.06, 0.08, 0.42);
     part(g, gunMat, 0, 0, -0.42, 0.035, 0.035, 0.14);
+    tube(g, polyMat, 0, 0, -0.56, 0.027, 0.15); // suppressor
+    part(g, accMat, 0, 0.058, -0.18, 0.02, 0.018, 0.3); // top rail
     part(g, accMat, 0, -0.1, -0.14, 0.045, 0.13, 0.06);
+    part(g, polyMat, 0, -0.105, -0.33, 0.04, 0.11, 0.045); // foregrip
     part(g, accMat, 0, 0.055, -0.2, 0.03, 0.03, 0.1);
     part(g, gunMat, 0, -0.02, 0.1, 0.05, 0.05, 0.12);
+    part(g, polyMat, 0, -0.01, 0.19, 0.048, 0.055, 0.1); // extended stock
   } else if (id === 'sniper') {
     part(g, gunMat, 0, 0, -0.24, 0.065, 0.085, 0.55);
     part(g, gunMat, 0, -0.01, -0.62, 0.03, 0.03, 0.3);
-    const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.17, 10), accMat);
-    scope.rotation.x = Math.PI / 2;
-    scope.position.set(0, 0.085, -0.22);
-    g.add(scope);
+    tube(g, accMat, 0, 0.088, -0.22, 0.028, 0.17); // scope tube
+    tube(g, gunMat, 0, 0.088, -0.315, 0.034, 0.03); // objective bell
+    part(g, gunMat, 0, 0.055, -0.28, 0.014, 0.03, 0.014); // scope rings
+    part(g, gunMat, 0, 0.055, -0.16, 0.014, 0.03, 0.014);
     part(g, accMat, 0, -0.09, -0.18, 0.045, 0.11, 0.06);
+    part(g, tanMat, 0, 0.045, 0.1, 0.056, 0.035, 0.12); // cheek rest
     part(g, gunMat, 0, -0.03, 0.12, 0.05, 0.05, 0.14);
+    part(g, polyMat, -0.045, -0.14, -0.52, 0.014, 0.16, 0.014, 0, 0.45); // bipod legs
+    part(g, polyMat, 0.045, -0.14, -0.52, 0.014, 0.16, 0.014, 0, -0.45);
   } else if (id === 'nade') {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: 0x51683c, roughness: 0.6 }));
     ball.position.set(0.01, -0.02, -0.12);
@@ -96,9 +119,13 @@ function buildGun(id) {
     // rifle
     part(g, gunMat, 0, 0, -0.22, 0.065, 0.09, 0.52);
     part(g, gunMat, 0, 0.005, -0.55, 0.035, 0.035, 0.18);
-    part(g, accMat, 0, -0.105, -0.2, 0.045, 0.14, 0.065);
-    part(g, accMat, 0, 0.07, -0.28, 0.025, 0.045, 0.03);
+    part(g, polyMat, 0, 0.002, -0.4, 0.076, 0.078, 0.24); // polymer handguard
+    part(g, accMat, 0, 0.062, -0.3, 0.02, 0.02, 0.42); // top rail
+    part(g, tanMat, 0, -0.115, -0.2, 0.046, 0.15, 0.066, 0.1); // curved magazine
+    part(g, accMat, 0, 0.07, -0.28, 0.025, 0.045, 0.03); // front sight post
+    part(g, gunMat, 0, 0.075, -0.06, 0.04, 0.035, 0.02); // rear sight block
     part(g, gunMat, 0, -0.02, 0.11, 0.05, 0.05, 0.13);
+    part(g, polyMat, 0, -0.01, 0.02, 0.056, 0.075, 0.12); // grip/trigger guard mass
     part(g, accMat, 0, -0.01, -0.02, 0.055, 0.07, 0.1);
   }
   const muzzle = new THREE.Object3D();

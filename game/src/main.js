@@ -38,26 +38,34 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 document.getElementById('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(P.sky);
-scene.fog = new THREE.Fog(P.fog, 42, 115);
+// No flat background colour: the map's gradient sky dome is the backdrop.
+scene.fog = new THREE.Fog(P.fog, 42, 128);
 const camera = new THREE.PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.05, 220);
 scene.add(camera);
 
-const hemi = new THREE.HemisphereLight(P.hemiSky, P.hemiGround, 0.85);
+const hemi = new THREE.HemisphereLight(P.hemiSky, P.hemiGround, 1.35);
 scene.add(hemi);
+// Sky bounce from the south-east: the low sun leaves east and south faces
+// to the hemisphere alone, which ACES crushes to black, so a soft shadowless
+// fill keeps shade-side walls and containers readable at dusk.
+const fill = new THREE.DirectionalLight(0x9db4d8, 1.15);
+fill.position.set(26, 20, 30);
+scene.add(fill);
 const sun = new THREE.DirectionalLight(P.sun, P.sunIntensity);
-sun.position.set(34, 42, 20);
+sun.position.set(...P.sunPos);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -42;
 sun.shadow.camera.right = 42;
 sun.shadow.camera.top = 42;
 sun.shadow.camera.bottom = -42;
-sun.shadow.camera.far = 120;
-sun.shadow.bias = -0.0006;
+sun.shadow.camera.far = 140;
+sun.shadow.bias = -0.0009;
 scene.add(sun);
 
 const map = createMap(scene);

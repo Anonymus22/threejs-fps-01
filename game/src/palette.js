@@ -6,6 +6,17 @@ export const PALETTE = {
   fog: 0x39445a,
   sun: 0xffb36b, // low warm sun
   sunIntensity: 2.6,
+  sunPos: [-34, 23, 16], // low WSW sun: long shadows rake ENE across the yard
+  skyZenith: 0x1d2942,
+  skyHorizon: 0x51607e,
+  skyGlow: 0xff9e57, // warm halo around the low sun
+  cloud: 0xa9b8d6,
+  lampGlow: 0xffc978,
+  puddle: 0x141a21, // near-black water that catches the sun's specular
+  sand: 0x8a7a5c,
+  barrelRust: 0x7a4a2e,
+  barrelSteel: 0x5a6672,
+  barrelOlive: 0x5c6644,
   hemiSky: 0x8fa3c7,
   hemiGround: 0x4c4438,
   ground: '#565a60', // asphalt
