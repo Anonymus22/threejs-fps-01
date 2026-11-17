@@ -58,6 +58,8 @@ const gunMat = new THREE.MeshStandardMaterial({ color: P.gunmetal, roughness: 0.
 const accMat = new THREE.MeshStandardMaterial({ color: P.gunAccent, roughness: 0.5, metalness: 0.4 });
 const polyMat = new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.72, metalness: 0.15 });
 const tanMat = new THREE.MeshStandardMaterial({ color: 0x8a6f4d, roughness: 0.62, metalness: 0.1 });
+const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x6f7a58, roughness: 0.95, metalness: 0 });
+const gloveMat = new THREE.MeshStandardMaterial({ color: 0x35322e, roughness: 0.85, metalness: 0.05 });
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 10);
 
@@ -82,52 +84,64 @@ function tube(group, mat, x, y, z, r, len) {
 function buildGun(id) {
   const g = new THREE.Group();
   if (id === 'pistol') {
-    part(g, gunMat, 0, 0, -0.1, 0.055, 0.09, 0.24);
-    part(g, accMat, 0, 0.048, -0.2, 0.042, 0.032, 0.1); // two-tone slide
-    part(g, polyMat, 0, -0.02, 0.05, 0.052, 0.1, 0.1); // polymer frame
-    part(g, accMat, 0, -0.085, -0.03, 0.05, 0.09, 0.07);
-    part(g, gunMat, 0, 0.082, -0.03, 0.032, 0.028, 0.045); // rear sight
-    part(g, gunMat, 0, 0.078, -0.235, 0.012, 0.03, 0.018); // front post
+    part(g, gunMat, 0, 0, -0.1, 0.062, 0.1, 0.26);
+    part(g, accMat, 0, 0.052, -0.2, 0.048, 0.036, 0.11); // two-tone slide
+    part(g, polyMat, 0, -0.02, 0.05, 0.058, 0.11, 0.11); // polymer frame
+    part(g, accMat, 0, -0.085, -0.03, 0.056, 0.1, 0.078);
+    part(g, gunMat, 0, 0.088, -0.03, 0.036, 0.03, 0.05); // rear sight
+    part(g, gunMat, 0, 0.084, -0.245, 0.014, 0.034, 0.02); // front post
+    part(g, gloveMat, 0, -0.145, -0.01, 0.062, 0.1, 0.085); // both hands on the grip
+    part(g, sleeveMat, 0.07, -0.23, 0.05, 0.08, 0.08, 0.24, 0.55); // forearm
   } else if (id === 'smg') {
-    part(g, gunMat, 0, 0, -0.16, 0.06, 0.08, 0.42);
-    part(g, gunMat, 0, 0, -0.42, 0.035, 0.035, 0.14);
-    tube(g, polyMat, 0, 0, -0.56, 0.027, 0.15); // suppressor
-    part(g, accMat, 0, 0.058, -0.18, 0.02, 0.018, 0.3); // top rail
-    part(g, accMat, 0, -0.1, -0.14, 0.045, 0.13, 0.06);
-    part(g, polyMat, 0, -0.105, -0.33, 0.04, 0.11, 0.045); // foregrip
-    part(g, accMat, 0, 0.055, -0.2, 0.03, 0.03, 0.1);
-    part(g, gunMat, 0, -0.02, 0.1, 0.05, 0.05, 0.12);
-    part(g, polyMat, 0, -0.01, 0.19, 0.048, 0.055, 0.1); // extended stock
+    part(g, gunMat, 0, 0, -0.16, 0.075, 0.095, 0.44);
+    part(g, gunMat, 0, 0, -0.42, 0.042, 0.042, 0.15);
+    tube(g, polyMat, 0, 0, -0.56, 0.032, 0.16); // suppressor
+    part(g, accMat, 0, 0.066, -0.18, 0.024, 0.02, 0.32); // top rail
+    part(g, accMat, 0, -0.11, -0.14, 0.052, 0.14, 0.068);
+    part(g, polyMat, 0, -0.115, -0.33, 0.048, 0.12, 0.052); // foregrip
+    part(g, accMat, 0, 0.062, -0.2, 0.036, 0.034, 0.11);
+    part(g, gunMat, 0, -0.02, 0.1, 0.058, 0.058, 0.13);
+    part(g, polyMat, 0, -0.01, 0.19, 0.056, 0.064, 0.11); // extended stock
+    part(g, gloveMat, 0, -0.165, -0.33, 0.07, 0.075, 0.1); // support hand
+    part(g, sleeveMat, 0.09, -0.25, -0.22, 0.082, 0.082, 0.3, 0.5); // forearm
+    part(g, gloveMat, 0, -0.075, 0.03, 0.062, 0.09, 0.075); // grip hand
   } else if (id === 'sniper') {
-    part(g, gunMat, 0, 0, -0.24, 0.065, 0.085, 0.55);
-    part(g, gunMat, 0, -0.01, -0.62, 0.03, 0.03, 0.3);
-    tube(g, accMat, 0, 0.088, -0.22, 0.028, 0.17); // scope tube
-    tube(g, gunMat, 0, 0.088, -0.315, 0.034, 0.03); // objective bell
-    part(g, gunMat, 0, 0.055, -0.28, 0.014, 0.03, 0.014); // scope rings
-    part(g, gunMat, 0, 0.055, -0.16, 0.014, 0.03, 0.014);
-    part(g, accMat, 0, -0.09, -0.18, 0.045, 0.11, 0.06);
-    part(g, tanMat, 0, 0.045, 0.1, 0.056, 0.035, 0.12); // cheek rest
-    part(g, gunMat, 0, -0.03, 0.12, 0.05, 0.05, 0.14);
-    part(g, polyMat, -0.045, -0.14, -0.52, 0.014, 0.16, 0.014, 0, 0.45); // bipod legs
-    part(g, polyMat, 0.045, -0.14, -0.52, 0.014, 0.16, 0.014, 0, -0.45);
+    part(g, gunMat, 0, 0, -0.24, 0.078, 0.1, 0.57);
+    part(g, gunMat, 0, -0.01, -0.62, 0.036, 0.036, 0.3);
+    tube(g, accMat, 0, 0.098, -0.22, 0.032, 0.18); // scope tube
+    tube(g, gunMat, 0, 0.098, -0.315, 0.04, 0.032); // objective bell
+    part(g, gunMat, 0, 0.062, -0.28, 0.016, 0.032, 0.016); // scope rings
+    part(g, gunMat, 0, 0.062, -0.16, 0.016, 0.032, 0.016);
+    part(g, accMat, 0, -0.1, -0.18, 0.052, 0.12, 0.068);
+    part(g, tanMat, 0, 0.052, 0.1, 0.064, 0.04, 0.13); // cheek rest
+    part(g, gunMat, 0, -0.03, 0.12, 0.058, 0.058, 0.15);
+    part(g, polyMat, -0.05, -0.15, -0.52, 0.016, 0.17, 0.016, 0, 0.45); // bipod legs
+    part(g, polyMat, 0.05, -0.15, -0.52, 0.016, 0.17, 0.016, 0, -0.45);
+    part(g, gloveMat, 0, -0.095, -0.44, 0.07, 0.07, 0.11); // support hand
+    part(g, sleeveMat, 0.09, -0.2, -0.3, 0.082, 0.082, 0.3, 0.5); // forearm
+    part(g, gloveMat, 0, -0.08, 0.04, 0.062, 0.09, 0.075); // grip hand
   } else if (id === 'nade') {
     const ball = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: 0x51683c, roughness: 0.6 }));
     ball.position.set(0.01, -0.02, -0.12);
     g.add(ball);
     part(g, accMat, 0.01, 0.035, -0.12, 0.02, 0.03, 0.02);
   } else {
-    // rifle
-    part(g, gunMat, 0, 0, -0.22, 0.065, 0.09, 0.52);
-    part(g, gunMat, 0, 0.005, -0.55, 0.035, 0.035, 0.18);
-    part(g, polyMat, 0, 0.002, -0.4, 0.076, 0.078, 0.24); // polymer handguard
-    part(g, accMat, 0, 0.062, -0.3, 0.02, 0.02, 0.42); // top rail
-    part(g, tanMat, 0, -0.115, -0.2, 0.046, 0.15, 0.066, 0.1); // curved magazine
-    part(g, accMat, 0, 0.07, -0.28, 0.025, 0.045, 0.03); // front sight post
-    part(g, gunMat, 0, 0.075, -0.06, 0.04, 0.035, 0.02); // rear sight block
-    part(g, gunMat, 0, -0.02, 0.11, 0.05, 0.05, 0.13);
-    part(g, polyMat, 0, -0.01, 0.02, 0.056, 0.075, 0.12); // grip/trigger guard mass
-    part(g, accMat, 0, -0.01, -0.02, 0.055, 0.07, 0.1);
+    // rifle — chunky stylised proportions, bold shapes first
+    part(g, gunMat, 0, 0, -0.22, 0.082, 0.108, 0.54);
+    part(g, gunMat, 0, 0.005, -0.56, 0.044, 0.044, 0.19);
+    part(g, polyMat, 0, 0.002, -0.41, 0.098, 0.1, 0.27); // polymer handguard
+    part(g, accMat, 0, 0.074, -0.3, 0.026, 0.024, 0.44); // top rail
+    part(g, tanMat, 0, -0.135, -0.2, 0.056, 0.17, 0.078, 0.1); // curved magazine
+    part(g, accMat, 0, 0.082, -0.28, 0.03, 0.052, 0.036); // front sight post
+    part(g, gunMat, 0, 0.088, -0.06, 0.048, 0.042, 0.024); // rear sight block
+    part(g, gunMat, 0, -0.02, 0.11, 0.06, 0.06, 0.15);
+    part(g, polyMat, 0, -0.01, 0.02, 0.068, 0.088, 0.14); // grip/trigger guard mass
+    part(g, accMat, 0, -0.01, -0.02, 0.066, 0.082, 0.11);
+    part(g, gloveMat, 0, -0.105, -0.44, 0.078, 0.075, 0.115); // support hand
+    part(g, sleeveMat, 0.095, -0.21, -0.31, 0.088, 0.088, 0.32, 0.5); // forearm
+    part(g, gloveMat, 0, -0.082, 0.03, 0.066, 0.095, 0.08); // grip hand
   }
+  g.scale.setScalar(1.1); // bold, readable silhouette
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.01, id === 'sniper' ? -0.78 : id === 'pistol' ? -0.26 : -0.62);
   g.add(muzzle);

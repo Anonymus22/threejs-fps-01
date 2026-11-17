@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="icon" href="data:,">
 <title>BREAKLINE — a three.js tactical FPS</title>
 <style>
   :root {
-    --ink: #ece7db;
-    --muted: #9aa3ad;
-    --panel: rgba(16, 19, 24, 0.88);
-    --hairline: #3a4149;
+    --ink: #f4f6f8;
+    --muted: #aebac2;
+    --panel: rgba(14, 20, 26, 0.78);
+    --hairline: #46525c;
     --accent: #f0a830;
     --teal: #37b6a8;
     --danger: #ff5a3c;
@@ -17,7 +18,7 @@
     --ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #14161a; color: var(--ink); font-family: var(--ui); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #bcd8ea; color: var(--ink); font-family: var(--ui); }
   #game, #game canvas { position: fixed; inset: 0; display: block; }
   #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
   #hud[hidden] { display: none; }
@@ -38,23 +39,23 @@
   #hitmarker i:nth-child(3) { top: 12px; left: 0; height: 2px; width: 8px; }
   #hitmarker i:nth-child(4) { top: 12px; right: 0; height: 2px; width: 8px; }
 
-  .bl { position: fixed; left: 26px; bottom: 22px; font-family: var(--readout); }
+  .bl { position: fixed; left: 26px; bottom: 22px; font-family: var(--readout); background: rgba(12, 18, 24, .55); padding: 10px 14px 12px; border-radius: 6px; }
   .bl .nums { display: flex; gap: 18px; align-items: baseline; }
   .stat-label { font-size: 10px; letter-spacing: .14em; color: var(--muted); }
   #health-num { font-size: 40px; line-height: 1; }
-  #armor-num { font-size: 22px; color: var(--teal); }
-  .bar { width: 170px; height: 5px; background: rgba(255,255,255,.14); margin-top: 5px; }
-  .bar i { display: block; height: 100%; background: var(--ink); width: 100%; }
-  .bar.armor i { background: var(--teal); }
+  #armor-num { font-size: 22px; color: #dfe9f2; }
+  .bar { width: 190px; height: 7px; background: rgba(255,255,255,.18); margin-top: 6px; border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: #69c24b; width: 100%; }
+  .bar.armor i { background: #e8eef2; }
 
-  .br { position: fixed; right: 26px; bottom: 22px; text-align: right; font-family: var(--readout); }
+  .br { position: fixed; right: 26px; bottom: 22px; text-align: right; font-family: var(--readout); background: rgba(12, 18, 24, .55); padding: 10px 14px 12px; border-radius: 6px; }
   #weapon-name { font-size: 13px; letter-spacing: .12em; color: var(--muted); }
   #ammo { font-size: 44px; line-height: 1.05; }
   #ammo-reserve { font-size: 16px; color: var(--muted); }
   #money { font-size: 18px; color: var(--accent); }
 
-  .top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); text-align: center; font-family: var(--readout); }
-  #timer { font-size: 30px; line-height: 1; }
+  .top { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); text-align: center; font-family: var(--readout); background: rgba(12, 18, 24, .55); padding: 8px 22px 9px; border-radius: 6px; }
+  #timer { font-size: 32px; line-height: 1; font-weight: 700; }
   #timer.danger { color: var(--danger); }
   .scores { display: flex; gap: 10px; justify-content: center; align-items: baseline; margin-top: 3px; font-size: 15px; }
   #score-att { color: var(--accent); font-size: 20px; }
@@ -62,12 +63,12 @@
   #phase-label { font-size: 10px; letter-spacing: .18em; color: var(--muted); margin-top: 2px; }
   #round-num { position: fixed; top: 16px; left: 26px; font-family: var(--readout); font-size: 13px; color: var(--muted); letter-spacing: .12em; }
 
-  #minimap { position: fixed; top: 44px; left: 26px; width: 150px; height: 150px; border: 1px solid var(--hairline); background: #20242b; opacity: .92; }
+  #minimap { position: fixed; top: 44px; left: 26px; width: 150px; height: 150px; border: 1px solid rgba(255,255,255,.35); border-radius: 6px; background: #20242b; opacity: .92; }
 
   #banner { position: fixed; top: 24%; left: 0; right: 0; text-align: center; opacity: 0; transition: opacity .25s ease; }
   #banner.on { opacity: 1; }
   #banner-title { font-size: 40px; font-weight: 700; letter-spacing: .06em; text-shadow: 0 2px 14px rgba(0,0,0,.6); }
-  #banner-sub { font-size: 16px; color: var(--muted); margin-top: 4px; }
+  #banner-sub { font-size: 16px; color: #e8eef2; margin-top: 4px; text-shadow: 0 1px 10px rgba(0,0,0,.65); }
 
   #killfeed { position: fixed; top: 16px; right: 26px; display: grid; gap: 4px; justify-items: end; font-family: var(--readout); font-size: 13px; }
   .feed-row { background: var(--panel); border: 1px solid var(--hairline); padding: 4px 9px; transition: opacity .6s ease; }

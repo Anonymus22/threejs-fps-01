@@ -4,6 +4,7 @@
 // they test line of sight (see physics.losClear).
 import * as THREE from 'three';
 import { PALETTE as P } from './palette.js';
+import { puffTexture } from './textures.js';
 
 function glowTexture() {
   const c = document.createElement('canvas');
@@ -59,14 +60,28 @@ export function createEffects(scene) {
   const flashLight = new THREE.PointLight(0xffbe78, 0, 11, 1.6);
   scene.add(flashLight);
 
-  // Smoke clouds (gameplay objects, see the header).
-  const smokeMat = new THREE.MeshStandardMaterial({ color: P.smoke, transparent: true, opacity: 0.52, roughness: 1, depthWrite: false });
+  // Smoke clouds (gameplay objects, see the header): clusters of big soft
+  // puff sprites that read as one stylised dust wall. The entry's pos/r are
+  // the logical sphere losClear tests against — same radius as ever.
+  const puffTex = puffTexture();
+  const PUFFS = [ // [x, y, z, size] in metres around the centre, for r = 3.4
+    [0, 0.1, 0, 3.4], [-1.5, -0.3, 0.5, 2.7], [1.5, -0.2, -0.4, 2.9],
+    [-0.8, 0.8, -0.8, 2.5], [0.9, 0.9, 0.8, 2.4], [0, -0.6, 1.2, 2.3],
+    [-1.9, 0.5, -1.1, 2.1], [1.9, 0.6, 1.2, 2.0], [0.1, 1.3, 0, 2.0],
+  ];
   const smokes = [];
   for (let i = 0; i < 6; i += 1) {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), smokeMat.clone());
-    m.visible = false;
-    scene.add(m);
-    smokes.push({ mesh: m, pos: m.position, r: 3.4, t: 0, active: false });
+    const mat = new THREE.SpriteMaterial({ map: puffTex, color: P.smoke, transparent: true, opacity: 0, depthWrite: false });
+    const grp = new THREE.Group();
+    for (const [px, py, pz, ps] of PUFFS) {
+      const sp = new THREE.Sprite(mat);
+      sp.position.set(px, py, pz);
+      sp.scale.set(ps, ps, 1);
+      grp.add(sp);
+    }
+    grp.visible = false;
+    scene.add(grp);
+    smokes.push({ mesh: grp, mat, pos: grp.position, r: 3.4, t: 0, active: false, spin: i * 1.13 });
   }
 
   // Explosion flash: one big glow sphere reused.
@@ -133,8 +148,9 @@ export function createEffects(scene) {
       s.t = time;
       s.mesh.visible = true;
       s.mesh.position.set(pos.x, 1.3, pos.z);
-      s.mesh.scale.set(radius, radius * 0.72, radius);
-      s.mesh.material.opacity = 0;
+      s.mesh.scale.setScalar(radius / 3.4);
+      s.mesh.rotation.y = s.spin;
+      s.mat.opacity = 0;
       return s;
     },
     update(dt) {
@@ -168,8 +184,9 @@ export function createEffects(scene) {
       for (const s of smokes) {
         if (!s.active) continue;
         s.t -= dt;
-        const target = s.t > 1 ? 0.52 : Math.max(0, s.t) * 0.52;
-        s.mesh.material.opacity += (target - s.mesh.material.opacity) * Math.min(1, dt * 5);
+        const target = s.t > 1 ? 0.92 : Math.max(0, s.t) * 0.92;
+        s.mat.opacity += (target - s.mat.opacity) * Math.min(1, dt * 5);
+        s.mesh.rotation.y += dt * 0.06; // slow billow, no allocation
         if (s.t <= 0) { s.active = false; s.mesh.visible = false; }
       }
     },

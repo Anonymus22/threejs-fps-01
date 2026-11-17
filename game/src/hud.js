@@ -204,9 +204,9 @@ export function createHud(S) {
     const p = S.entities[0];
     const toX = (x) => ((x + 32) / 64) * W;
     const toY = (z) => ((z + 32) / 64) * W;
-    g.fillStyle = '#20242b';
+    g.fillStyle = '#272e36';
     g.fillRect(0, 0, W, W);
-    g.fillStyle = '#3c4149';
+    g.fillStyle = '#4c565f';
     for (const b of S.map.boxes) g.fillRect(toX(b.x - b.hx), toY(b.z - b.hz), (b.hx * 2 / 64) * W, (b.hz * 2 / 64) * W);
     for (const key of ['A', 'B']) {
       const s = S.map.sites[key];

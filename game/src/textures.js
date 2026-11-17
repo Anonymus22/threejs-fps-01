@@ -42,7 +42,7 @@ function speckle(g, rand, w, h, n, alpha) {
 export function corrugatedTexture() {
   const [c, g] = makeCanvas(512, 512);
   const rand = mulberry(11);
-  g.fillStyle = '#c9ccd1';
+  g.fillStyle = '#d3d6db';
   g.fillRect(0, 0, 512, 512);
   for (let x = 0; x < 512; x += 32) {
     const grad = g.createLinearGradient(x, 0, x + 32, 0);
@@ -68,7 +68,7 @@ export function corrugatedTexture() {
     const y = rand() > 0.6 ? 128 : 0;
     const len = 60 + rand() * 320;
     const grad = g.createLinearGradient(0, y, 0, y + len);
-    grad.addColorStop(0, 'rgba(146,84,44,0.42)');
+    grad.addColorStop(0, 'rgba(146,84,44,0.22)');
     grad.addColorStop(1, 'rgba(146,84,44,0)');
     g.fillStyle = grad;
     g.fillRect(x, y, 3 + rand() * 9, len);
@@ -189,7 +189,7 @@ export function cloudTexture() {
     const y = 48 + rand() * 34;
     const r = 20 + rand() * 30;
     const grad = g.createRadialGradient(x, y, 1, x, y, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.20)');
+    grad.addColorStop(0, 'rgba(255,255,255,0.30)');
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = grad;
     g.fillRect(x - r, y - r, r * 2, r * 2);
@@ -197,23 +197,46 @@ export function cloudTexture() {
   return toTexture(c, false);
 }
 
-// Distant block silhouettes with a scatter of lit windows.
+// Distant block silhouettes in midday haze: pale blue-grey slabs with a
+// regular grid of shaded windows, bases washed out by the horizon fog.
 export function skylineTexture() {
   const [c, g] = makeCanvas(256, 256);
   const rand = mulberry(67);
-  g.fillStyle = '#171d28';
+  g.fillStyle = '#a9bfce';
   g.fillRect(0, 0, 256, 256);
   for (let x = 10; x < 246; x += 17) {
     for (let y = 14; y < 240; y += 23) {
       const r = rand();
-      g.fillStyle = r < 0.16 ? 'rgba(255,202,122,0.92)' : r < 0.23 ? 'rgba(169,198,232,0.85)' : '#232c3d';
+      g.fillStyle = r < 0.2 ? 'rgba(240,246,250,0.75)' : 'rgba(84,104,124,0.38)';
       g.fillRect(x, y, 8, 11);
     }
   }
-  const grad = g.createLinearGradient(0, 190, 0, 256);
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.45)');
+  const grad = g.createLinearGradient(0, 170, 0, 256);
+  grad.addColorStop(0, 'rgba(215,230,240,0)');
+  grad.addColorStop(1, 'rgba(215,230,240,0.65)');
   g.fillStyle = grad;
-  g.fillRect(0, 190, 256, 66);
+  g.fillRect(0, 170, 256, 86);
+  return toTexture(c, false);
+}
+
+// One stylised smoke puff: a cluster of soft round blobs, dense in the
+// middle and fully faded at the rim, so a handful of sprites reads as one
+// big cartoon dust cloud.
+export function puffTexture() {
+  const [c, g] = makeCanvas(256, 256);
+  const rand = mulberry(83);
+  for (let i = 0; i < 22; i += 1) {
+    const a = rand() * Math.PI * 2;
+    const d = rand() * 52;
+    const x = 128 + Math.cos(a) * d;
+    const y = 128 + Math.sin(a) * d * 0.82;
+    const r = 34 + rand() * 40;
+    const grad = g.createRadialGradient(x, y, 1, x, y, r);
+    grad.addColorStop(0, 'rgba(255,255,255,0.46)');
+    grad.addColorStop(0.7, 'rgba(255,255,255,0.24)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grad;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
   return toTexture(c, false);
 }

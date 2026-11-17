@@ -25,21 +25,21 @@ function groundTexture() {
   const pz = (z) => (z + 32) * S;
   g.fillStyle = P.ground;
   g.fillRect(0, 0, 1024, 1024);
-  // Asphalt speckle.
+  // Sand speckle.
   for (let i = 0; i < 9000; i += 1) {
-    g.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.07)';
+    g.fillStyle = Math.random() > 0.5 ? 'rgba(255,246,220,0.05)' : 'rgba(122,90,40,0.06)';
     g.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
   }
-  // Oil stains and tonal patches, so the asphalt is not one flat grey.
-  for (const [sx, sz, r, a] of [[-22, 8, 5, 0.17], [24, -2, 6, 0.13], [2, -18, 4, 0.16], [-6, 26, 5, 0.11], [18, 18, 4, 0.12]]) {
+  // Dusty tonal patches, so the sand is not one flat sheet.
+  for (const [sx, sz, r, a] of [[-22, 8, 5, 0.09], [24, -2, 6, 0.07], [2, -18, 4, 0.08], [-6, 26, 5, 0.06], [18, 18, 4, 0.07]]) {
     const grad = g.createRadialGradient(px(sx), pz(sz), 4, px(sx), pz(sz), r * S);
-    grad.addColorStop(0, `rgba(16,18,22,${a})`);
-    grad.addColorStop(1, 'rgba(16,18,22,0)');
+    grad.addColorStop(0, `rgba(133,102,52,${a})`);
+    grad.addColorStop(1, 'rgba(133,102,52,0)');
     g.fillStyle = grad;
     g.fillRect(px(sx) - r * S, pz(sz) - r * S, r * S * 2, r * S * 2);
   }
   // Expansion joints: a faint grid that gives the yard its scale.
-  g.strokeStyle = 'rgba(20,22,26,0.20)';
+  g.strokeStyle = 'rgba(120,90,40,0.10)';
   g.lineWidth = 2;
   for (let m = -32; m <= 32; m += 8) {
     g.beginPath();
@@ -117,7 +117,7 @@ export function createMap(scene) {
   const containerMats = new Map();
   function containerMat(color) {
     if (!containerMats.has(color)) {
-      containerMats.set(color, new THREE.MeshStandardMaterial({ color, map: corrugated, roughness: 0.55, metalness: 0.12 }));
+      containerMats.set(color, new THREE.MeshStandardMaterial({ color, map: corrugated, roughness: 0.6, metalness: 0.06 }));
     }
     return containerMats.get(color);
   }
@@ -126,7 +126,7 @@ export function createMap(scene) {
   const crateDarkMat = new THREE.MeshStandardMaterial({ color: P.crateDark, map: wood, roughness: 0.95 });
   const concrete = concreteTexture();
   const wallMat = new THREE.MeshStandardMaterial({ color: P.wall, map: concrete, roughness: 0.94 });
-  const wallDarkMat = new THREE.MeshStandardMaterial({ color: 0x878d94, map: concrete, roughness: 0.94 });
+  const wallDarkMat = new THREE.MeshStandardMaterial({ color: P.wallDark, map: concrete, roughness: 0.94 });
 
   function solid(x, z, hx, hz, h, color, rough) {
     const mesh = new THREE.Mesh(boxGeo, color && color.isMaterial ? color : mat(color, rough));
@@ -158,7 +158,7 @@ export function createMap(scene) {
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   scene.add(ground);
-  const apron = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0x232830, 1));
+  const apron = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0xb59a68, 1));
   apron.rotation.x = -Math.PI / 2;
   apron.position.y = -0.05;
   scene.add(apron);
@@ -204,7 +204,7 @@ export function createMap(scene) {
   });
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(185, 24, 12), skyMat));
 
-  // A few soft billboard clouds drifting in the dusk (static: the shot
+  // A few soft billboard clouds drifting overhead (static: the shot
   // poses must stay deterministic).
   const cloudTex = cloudTexture();
   for (const [x, y, z, s, o] of [[-60, 47, -70, 62, 0.4], [42, 53, -82, 74, 0.34], [-24, 58, 64, 68, 0.3], [72, 45, 28, 52, 0.36], [-84, 51, 6, 58, 0.3], [8, 63, -44, 84, 0.26]]) {
@@ -277,22 +277,23 @@ export function createMap(scene) {
     scene.add(sign);
   }
 
-  // Yard lamps: pole, emissive head, a glow sprite and a warm pool of
-  // light on the asphalt, plus real point lights at the site approaches.
+  // Yard lamps: pole, emissive head, a glow sprite and a faint warm pool
+  // on the sand. Midday sun does the real lighting now — these are dressing,
+  // kept dim so they read as fixtures, not light sources.
   const lampGeo = new THREE.CylinderGeometry(0.09, 0.12, 5.4, 6);
   const glowTex = glowTexture();
   const poolGeo = new THREE.CircleGeometry(3.4, 20);
-  const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffbe78, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
+  const poolMat = new THREE.MeshBasicMaterial({ map: glowTex, color: 0xffbe78, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false });
   for (const [x, z] of [[-8, 12], [8, 12], [-8, -12], [8, -12], [0, -24]]) {
     const pole = new THREE.Mesh(lampGeo, mat(P.metal, 0.5));
     pole.position.set(x, 2.7, z);
     pole.castShadow = true;
     scene.add(pole);
-    const head = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc978, emissiveIntensity: 2.2 }));
+    const head = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc978, emissiveIntensity: 0.5 }));
     head.scale.set(0.7, 0.16, 0.7);
     head.position.set(x, 5.45, z);
     scene.add(head);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: P.lampGlow, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: P.lampGlow, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
     glow.scale.set(3.2, 3.2, 1);
     glow.position.set(x, 5.45, z);
     scene.add(glow);
@@ -301,16 +302,16 @@ export function createMap(scene) {
     pool.position.set(x, 0.02, z);
     scene.add(pool);
   }
-  const lampLight = new THREE.PointLight(0xffd9a0, 60, 26, 1.8);
+  const lampLight = new THREE.PointLight(0xffd9a0, 12, 26, 1.8);
   lampLight.position.set(0, 5.2, -24);
   scene.add(lampLight);
   for (const [x, z] of [[-8, -12], [8, -12]]) {
-    const extra = new THREE.PointLight(0xffd9a0, 42, 22, 1.8);
+    const extra = new THREE.PointLight(0xffd9a0, 8, 22, 1.8);
     extra.position.set(x, 5.2, z);
     scene.add(extra);
   }
 
-  // Distant depot silhouettes for the skyline, windows lit against the fog.
+  // Distant depot silhouettes for the skyline, hazed by the midday fog.
   const skylineMat = new THREE.MeshBasicMaterial({ map: skylineTexture() });
   for (const [x, z, w, h] of [[-46, -44, 26, 13], [30, -48, 34, 17], [52, 6, 20, 11], [-52, 14, 22, 9], [4, -52, 22, 8]]) {
     const m = new THREE.Mesh(boxGeo, skylineMat);
@@ -405,6 +406,79 @@ export function createMap(scene) {
     p.receiveShadow = true;
     scene.add(p);
   }
+
+  // Palms: low-poly trees — a curved trunk of stacked segments under a
+  // crown of arcing frond planes. They ring the depot outside the walls
+  // and stand in the yard's corners and edges; every inside trunk was
+  // checked clear of the waypoint graph and hold points below, and
+  // carries a slim collider in the usual style.
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a7358, roughness: 1 });
+  const frondMat = new THREE.MeshStandardMaterial({ color: 0x5e8f3e, roughness: 0.9, side: THREE.DoubleSide });
+  const nutMat = new THREE.MeshStandardMaterial({ color: 0x6d5a35, roughness: 1 });
+  const frondGeo = (() => {
+    const geo = new THREE.PlaneGeometry(0.62, 2.9, 1, 5);
+    geo.translate(0, 1.45, 0);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i += 1) {
+      const y0 = pos.getY(i);
+      const t = y0 / 2.9;
+      pos.setX(i, pos.getX(i) * (1 - t * 0.72)); // taper to the tip
+      pos.setY(i, 0.38 * t - 1.02 * t * t); // rise, then droop
+      pos.setZ(i, y0); // length axis becomes +Z: the frond reaches out
+    }
+    geo.computeVertexNormals();
+    return geo;
+  })();
+  const trunkSegGeo = new THREE.CylinderGeometry(0.12, 0.17, 1.02, 7);
+  const nutGeo = new THREE.SphereGeometry(0.15, 8, 6);
+  function palm(x, z, lean, rot, s, inside) {
+    const g = new THREE.Group();
+    let px = 0;
+    for (let i = 0; i < 5; i += 1) {
+      const seg = new THREE.Mesh(trunkSegGeo, trunkMat);
+      px += lean * 0.14 * (0.5 + i * 0.28);
+      seg.position.set(px, 0.5 + i * 0.94, 0);
+      seg.rotation.z = -lean * (0.35 + i * 0.13);
+      seg.castShadow = true;
+      g.add(seg);
+    }
+    const topY = 4.88;
+    for (let f = 0; f < 7; f += 1) {
+      const frond = new THREE.Mesh(frondGeo, frondMat);
+      frond.position.set(px, topY, 0);
+      frond.rotation.y = rot + (f / 7) * Math.PI * 2 + (f % 3) * 0.21;
+      frond.castShadow = true;
+      g.add(frond);
+    }
+    for (const [nx, nz] of [[0.16, 0.1], [-0.13, 0.14]]) {
+      const nut = new THREE.Mesh(nutGeo, nutMat);
+      nut.position.set(px + nx, topY - 0.22, nz);
+      g.add(nut);
+    }
+    g.position.set(x, 0, z);
+    g.scale.setScalar(s);
+    scene.add(g);
+    if (inside) {
+      colliders.push({ x, z, hx: 0.26, hz: 0.26, h: 4.8 });
+      boxes.push({ x, z, hx: 0.26, hz: 0.26 });
+    }
+  }
+  // Inside the walls: corners and lane edges, all off the bot graph.
+  palm(-28.6, -28.6, 0.5, 0.4, 1.05, true);
+  palm(28.6, -28.6, -0.4, 1.7, 0.95, true);
+  palm(-28.6, 28.6, 0.3, 2.6, 1.1, true);
+  palm(28.6, 28.6, -0.55, 0.9, 1.0, true);
+  palm(-29.5, 6, 0.45, 1.2, 0.9, true);
+  palm(29.5, 6, -0.3, 2.2, 1.08, true);
+  // Outside the walls: a loose ring in the desert.
+  palm(-38, -20, 0.6, 0.2, 1.15, false);
+  palm(38, -24, -0.5, 1.4, 1.05, false);
+  palm(-40, 14, 0.35, 2.9, 0.95, false);
+  palm(40, 18, -0.6, 0.6, 1.12, false);
+  palm(-20, -40, 0.4, 1.9, 1.0, false);
+  palm(16, -42, -0.35, 2.4, 1.08, false);
+  palm(24, 40, -0.45, 0.1, 0.98, false);
+  palm(-24, 42, 0.55, 1.1, 1.06, false);
 
   const sites = {
     A: { name: 'A', x: -19, z: -20, r: 6.5, color: P.siteA },
