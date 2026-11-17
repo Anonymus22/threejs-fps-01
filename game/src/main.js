@@ -749,6 +749,13 @@ function step(dt) {
 }
 
 function syncCamera() {
+  if (!started) {
+    // Menu backdrop: a high scenic view over the yard, not the spawn camera.
+    camera.position.set(24, 13, 27);
+    camera.lookAt(0, 1, -3);
+    viewmodel.root.visible = false;
+    return;
+  }
   if (!player.alive && spectateTarget && spectateTarget.alive && (S.phase === 'live' || S.phase === 'planted')) {
     if (spectateTarget.mesh) spectateTarget.mesh.visible = false;
     camera.position.set(spectateTarget.pos.x, spectateTarget.pos.y + 1.62, spectateTarget.pos.z);
